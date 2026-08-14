@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AX Company - My Page</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #f4f6f8;
+            font-family: Arial, sans-serif;
+            color: #222;
+        }
+
+        /* =========================================================
+           HEADER
+        ========================================================= */
+
+        .header {
+            height: 70px;
+            background: #222;
+            color: white;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            padding: 0 40px;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .user {
+            font-size: 14px;
+        }
+
+        .logout-button {
+            padding: 8px 14px;
+
+            border: 1px solid #555;
+            border-radius: 5px;
+
+            background: transparent;
+            color: white;
+
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .logout-button:hover {
+            background: #444;
+        }
+
+
+        /* =========================================================
+           CONTENT
+        ========================================================= */
+
+        .container {
+            width: 1100px;
+            max-width: 90%;
+            margin: 40px auto;
+        }
+
+        .welcome {
+            margin-bottom: 30px;
+        }
+
+        .welcome h1 {
+            margin: 0 0 8px 0;
+        }
+
+        .welcome p {
+            margin: 0;
+            color: #777;
+        }
+
+
+        /* =========================================================
+           GRID
+        ========================================================= */
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+
+        /* =========================================================
+           CARD
+        ========================================================= */
+
+        .card {
+            background: white;
+
+            padding: 25px;
+
+            border-radius: 10px;
+
+            box-shadow:
+                0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .card h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+        }
+
+        .full-card {
+            grid-column: span 2;
+        }
+
+
+        /* =========================================================
+           직원 정보
+        ========================================================= */
+
+        .info-row {
+            display: flex;
+
+            justify-content: space-between;
+            align-items: center;
+
+            padding: 12px 0;
+
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            color: #777;
+        }
+
+        .value {
+            font-weight: bold;
+        }
+
+
+        /* =========================================================
+           휴가 현황
+        ========================================================= */
+
+        .leave-summary {
+            display: grid;
+
+            grid-template-columns: repeat(3, 1fr);
+
+            gap: 15px;
+        }
+
+        .leave-box {
+            background: #f7f7f7;
+
+            padding: 25px 10px;
+
+            text-align: center;
+
+            border-radius: 8px;
+        }
+
+        .leave-title {
+            color: #777;
+
+            font-size: 14px;
+
+            margin-bottom: 10px;
+        }
+
+        .leave-number {
+            font-size: 30px;
+
+            font-weight: bold;
+        }
+
+        .remaining {
+            color: #222;
+        }
+
+
+        /* =========================================================
+           휴가 신청
+        ========================================================= */
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+
+            margin-bottom: 8px;
+
+            font-size: 14px;
+
+            font-weight: bold;
+
+            color: #444;
+        }
+
+        .form-group input,
+        .form-group textarea {
+
+            width: 100%;
+
+            padding: 12px;
+
+            border: 1px solid #ddd;
+
+            border-radius: 6px;
+
+            font-size: 14px;
+
+            font-family: Arial, sans-serif;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+
+            outline: none;
+
+            border-color: #555;
+        }
+
+        .date-container {
+
+            display: grid;
+
+            grid-template-columns: 1fr 1fr;
+
+            gap: 15px;
+        }
+
+        .submit-button {
+
+            width: 100%;
+
+            padding: 14px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            background: #222;
+
+            color: white;
+
+            font-size: 15px;
+
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        .submit-button:hover {
+            background: #444;
+        }
+
+
+        /* =========================================================
+           신청중 휴가
+        ========================================================= */
+
+        .pending-info {
+
+            margin-bottom: 20px;
+
+            padding: 12px 15px;
+
+            background: #fff8e1;
+
+            border-radius: 6px;
+
+            color: #856404;
+
+            font-size: 13px;
+        }
+
+        .pending-table {
+
+            width: 100%;
+
+            border-collapse: collapse;
+
+            font-size: 14px;
+        }
+
+        .pending-table th {
+
+            padding: 12px 10px;
+
+            text-align: left;
+
+            color: #777;
+
+            font-size: 13px;
+
+            border-bottom: 1px solid #ddd;
+
+            white-space: nowrap;
+        }
+
+        .pending-table td {
+
+            padding: 14px 10px;
+
+            border-bottom: 1px solid #eee;
+
+            white-space: nowrap;
+        }
+
+        .pending-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+
+        /* =========================================================
+           휴가 이력 테이블
+        ========================================================= */
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .history-table {
+
+            width: 100%;
+
+            border-collapse: collapse;
+
+            font-size: 14px;
+        }
+
+        .history-table th {
+
+            padding: 14px 10px;
+
+            text-align: left;
+
+            color: #777;
+
+            font-size: 13px;
+
+            font-weight: bold;
+
+            border-bottom: 1px solid #ddd;
+
+            white-space: nowrap;
+        }
+
+        .history-table td {
+
+            padding: 14px 10px;
+
+            border-bottom: 1px solid #eee;
+
+            white-space: nowrap;
+        }
+
+        .history-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+
+        /* =========================================================
+           상태
+        ========================================================= */
+
+        .status {
+
+            display: inline-block;
+
+            padding: 5px 10px;
+
+            border-radius: 20px;
+
+            font-size: 12px;
+
+            font-weight: bold;
+        }
+
+        .status-pending {
+
+            background: #fff3cd;
+
+            color: #856404;
+        }
+
+        .status-approved {
+
+            background: #d4edda;
+
+            color: #155724;
+        }
+
+        .status-rejected {
+
+            background: #f8d7da;
+
+            color: #721c24;
+        }
+
+        .status-cancelled {
+
+            background: #e2e3e5;
+
+            color: #383d41;
+        }
+
+
+        /* =========================================================
+           데이터 없음
+        ========================================================= */
+
+        .empty {
+
+            padding: 30px 0;
+
+            text-align: center;
+
+            color: #999;
+
+            font-size: 14px;
+        }
+
+
+        /* =========================================================
+           SYSTEM INFO
+        ========================================================= */
+
+        .system-info {
+
+            margin-top: 30px;
+
+            padding: 18px 20px;
+
+            background: #fafafa;
+
+            border: 1px solid #eee;
+
+            border-radius: 8px;
+
+            color: #777;
+
+            font-size: 13px;
+
+            line-height: 1.6;
+        }
+
+
+        /* =========================================================
+           MOBILE
+        ========================================================= */
+
+        @media (max-width: 700px) {
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .full-card {
+                grid-column: span 1;
+            }
+
+            .leave-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .date-container {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                padding: 0 20px;
+            }
+
+            .user {
+                display: none;
+            }
+
+            .container {
+                max-width: 94%;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<!-- ============================================================
+     HEADER
+============================================================ -->
+
+<div class="header">
+
+    <div class="logo">
+        AX Company
+    </div>
+
+    <div class="header-right">
+
+        <div class="user">
+
+            {{ employee.name }}
+
+            |
+
+            {{ employee.employee_id }}
+
+        </div>
+
+        <button
+            type="button"
+            class="logout-button"
+            onclick="location.href='/'"
+        >
+            로그아웃
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- ============================================================
+     CONTENT
+============================================================ -->
+
+<div class="container">
+
+
+    <!-- ========================================================
+         환영 메시지
+    ========================================================= -->
+
+    <div class="welcome">
+
+        <h1>
+            {{ employee.name }}님 환영합니다.
+        </h1>
+
+        <p>
+            AI 업무 자동화 시스템
+        </p>
+
+    </div>
+
+
+    <div class="grid">
+
+
+        <!-- ====================================================
+             1. 직원 정보
+        ==================================================== -->
+
+        <div class="card">
+
+            <h2>
+                직원 정보
+            </h2>
+
+
+            <div class="info-row">
+
+                <span class="label">
+                    사번
+                </span>
+
+                <span class="value">
+                    {{ employee.employee_id }}
+                </span>
+
+            </div>
+
+
+            <div class="info-row">
+
+                <span class="label">
+                    이름
+                </span>
+
+                <span class="value">
+                    {{ employee.name }}
+                </span>
+
+            </div>
+
+
+            <div class="info-row">
+
+                <span class="label">
+                    부서
+                </span>
+
+                <span class="value">
+                    {{ employee.department }}
+                </span>
+
+            </div>
+
+
+            <div class="info-row">
+
+                <span class="label">
+                    직급
+                </span>
+
+                <span class="value">
+                    {{ employee.position }}
+                </span>
+
+            </div>
+
+
+            <div class="info-row">
+
+                <span class="label">
+                    이메일
+                </span>
+
+                <span class="value">
+                    {{ employee.email }}
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <!-- ====================================================
+             2. 휴가 현황
+        ==================================================== -->
+
+        <div class="card">
+
+            <h2>
+                휴가 현황
+            </h2>
+
+
+            <div class="leave-summary">
+
+
+                <div class="leave-box">
+
+                    <div class="leave-title">
+                        총 휴가
+                    </div>
+
+                    <div class="leave-number">
+                        {{ employee.total_days }}
+                    </div>
+
+                    <div>
+                        일
+                    </div>
+
+                </div>
+
+
+                <div class="leave-box">
+
+                    <div class="leave-title">
+                        사용 휴가
+                    </div>
+
+                    <div class="leave-number">
+                        {{ employee.used_days }}
+                    </div>
+
+                    <div>
+                        일
+                    </div>
+
+                </div>
+
+
+                <div class="leave-box">
+
+                    <div class="leave-title">
+                        잔여 휴가
+                    </div>
+
+                    <div class="leave-number remaining">
+                        {{ employee.remaining_days }}
+                    </div>
+
+                    <div>
+                        일
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ====================================================
+             3. 휴가 신청
+        ==================================================== -->
+
+        <div class="card full-card">
+
+            <h2>
+                휴가 신청
+            </h2>
+
+
+            <form
+                method="post"
+                action="/leave/request/{{ employee.employee_id }}"
+            >
+
+
+                <div class="date-container">
+
+
+                    <div class="form-group">
+
+                        <label for="start_date">
+                            시작일
+                        </label>
+
+                        <input
+                            type="date"
+                            id="start_date"
+                            name="start_date"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="end_date">
+                            종료일
+                        </label>
+
+                        <input
+                            type="date"
+                            id="end_date"
+                            name="end_date"
+                            required
+                        >
+
+                    </div>
+
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="reason">
+                        휴가 사유
+                    </label>
+
+                    <textarea
+                        id="reason"
+                        name="reason"
+                        rows="4"
+                        placeholder="휴가 사유를 입력하세요."
+                    ></textarea>
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="submit-button"
+                >
+                    휴가 신청
+                </button>
+
+
+            </form>
+
+        </div>
+
+
+        <!-- ====================================================
+             4. 신청중 휴가
+        ==================================================== -->
+
+        <div class="card full-card">
+
+            <h2>
+                신청중 휴가
+            </h2>
+
+
+            <div class="pending-info">
+
+                현재 승인 대기 중인 휴가 신청입니다.
+                AI 업무 처리 결과에 따라 승인 또는 반려 상태로 변경됩니다.
+
+            </div>
+
+
+            {% set pending_requests = leave_requests
+                | selectattr("status", "equalto", "PENDING")
+                | list
+            %}
+
+
+            {% if pending_requests %}
+
+
+                <div class="table-container">
+
+                    <table class="pending-table">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                    신청번호
+                                </th>
+
+                                <th>
+                                    신청일
+                                </th>
+
+                                <th>
+                                    휴가기간
+                                </th>
+
+                                <th>
+                                    일수
+                                </th>
+
+                                <th>
+                                    사유
+                                </th>
+
+                                <th>
+                                    상태
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+
+                        {% for leave in pending_requests %}
+
+                            <tr>
+
+                                <td>
+                                    {{ leave.request_id }}
+                                </td>
+
+
+                                <td>
+
+                                    {% if leave.created_at %}
+
+                                        {{ leave.created_at.strftime('%Y-%m-%d') }}
+
+                                    {% else %}
+
+                                        -
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <td>
+
+                                    {{ leave.start_date }}
+
+                                    ~
+
+                                    {{ leave.end_date }}
+
+                                </td>
+
+
+                                <td>
+                                    {{ leave.leave_days }}일
+                                </td>
+
+
+                                <td>
+                                    {{ leave.reason or '-' }}
+                                </td>
+
+
+                                <td>
+
+                                    <span class="status status-pending">
+                                        승인 대기
+                                    </span>
+
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+
+            {% else %}
+
+
+                <div class="empty">
+
+                    현재 신청중인 휴가가 없습니다.
+
+                </div>
+
+
+            {% endif %}
+
+
+        </div>
+
+
+        <!-- ====================================================
+             5. 휴가 이력 관리
+        ==================================================== -->
+
+        <div class="card full-card">
+
+            <h2>
+                휴가 이력 관리
+            </h2>
+
+
+            {% if leave_requests %}
+
+
+                <div class="table-container">
+
+                    <table class="history-table">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                    신청번호
+                                </th>
+
+                                <th>
+                                    신청일
+                                </th>
+
+                                <th>
+                                    휴가기간
+                                </th>
+
+                                <th>
+                                    일수
+                                </th>
+
+                                <th>
+                                    사유
+                                </th>
+
+                                <th>
+                                    상태
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+
+                        {% for leave in leave_requests %}
+
+                            <tr>
+
+
+                                <!-- 신청번호 -->
+
+                                <td>
+
+                                    {{ leave.request_id }}
+
+                                </td>
+
+
+                                <!-- 신청일 -->
+
+                                <td>
+
+                                    {% if leave.created_at %}
+
+                                        {{ leave.created_at.strftime('%Y-%m-%d') }}
+
+                                    {% else %}
+
+                                        -
+
+                                    {% endif %}
+
+                                </td>
+
+
+                                <!-- 휴가기간 -->
+
+                                <td>
+
+                                    {{ leave.start_date }}
+
+                                    ~
+
+                                    {{ leave.end_date }}
+
+                                </td>
+
+
+                                <!-- 일수 -->
+
+                                <td>
+
+                                    {{ leave.leave_days }}일
+
+                                </td>
+
+
+                                <!-- 사유 -->
+
+                                <td>
+
+                                    {{ leave.reason or '-' }}
+
+                                </td>
+
+
+                                <!-- 상태 -->
+
+                                <td>
+
+
+                                    {% if leave.status == 'PENDING' %}
+
+                                        <span class="status status-pending">
+                                            승인 대기
+                                        </span>
+
+
+                                    {% elif leave.status == 'APPROVED' %}
+
+                                        <span class="status status-approved">
+                                            승인
+                                        </span>
+
+
+                                    {% elif leave.status == 'REJECTED' %}
+
+                                        <span class="status status-rejected">
+                                            반려
+                                        </span>
+
+
+                                    {% elif leave.status == 'CANCELLED' %}
+
+                                        <span class="status status-cancelled">
+                                            취소
+                                        </span>
+
+
+                                    {% else %}
+
+                                        <span class="status">
+                                            {{ leave.status }}
+                                        </span>
+
+                                    {% endif %}
+
+
+                                </td>
+
+
+                            </tr>
+
+                        {% endfor %}
+
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+
+            {% else %}
+
+
+                <div class="empty">
+
+                    아직 휴가 신청 이력이 없습니다.
+
+                </div>
+
+
+            {% endif %}
+
+
+        </div>
+
+
+    </div>
+
+
+    <!-- ========================================================
+         SYSTEM INFO
+    ========================================================= -->
+
+    <div class="system-info">
+
+        <strong>AI 업무 자동화 시스템</strong><br>
+
+        휴가 신청 정보는 업무 시스템 데이터베이스에 저장됩니다.
+        이후 AI 업무 비서를 통해 자연어로 휴가 조회 및 신청,
+        승인 등의 업무를 자동으로 처리할 수 있습니다.
+
+    </div>
+
+
+</div>
+
+
+</body>
+
+</html>

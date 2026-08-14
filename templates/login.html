@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AX Company - Login</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            background: #f4f6f8;
+            font-family: Arial, sans-serif;
+        }
+
+        .login-container {
+            width: 420px;
+
+            background: white;
+
+            padding: 40px;
+
+            border-radius: 12px;
+
+            box-shadow:
+                0 8px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Logo */
+
+        .logo {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+        .logo h1 {
+            margin: 0;
+
+            font-size: 28px;
+
+            color: #222;
+        }
+
+        .logo p {
+            margin-top: 8px;
+
+            color: #777;
+
+            font-size: 14px;
+        }
+
+        /* Form */
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+
+            margin-bottom: 8px;
+
+            font-size: 14px;
+
+            font-weight: bold;
+
+            color: #444;
+        }
+
+        .form-group input {
+            width: 100%;
+
+            padding: 13px;
+
+            border: 1px solid #ddd;
+
+            border-radius: 6px;
+
+            font-size: 15px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+
+            border-color: #555;
+        }
+
+        /* Login Button */
+
+        .login-button {
+            width: 100%;
+
+            padding: 14px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            background: #222;
+
+            color: white;
+
+            font-size: 16px;
+
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        .login-button:hover {
+            background: #444;
+        }
+
+        /* Demo Account */
+
+        .demo-account {
+            margin-top: 25px;
+
+            padding: 15px;
+
+            background: #f7f7f7;
+
+            border-radius: 6px;
+
+            font-size: 13px;
+
+            color: #555;
+        }
+
+        .demo-account-title {
+            font-weight: bold;
+
+            margin-bottom: 8px;
+        }
+
+        .demo-account div {
+            margin: 4px 0;
+        }
+
+        .demo-account span {
+            font-weight: bold;
+
+            color: #222;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="login-container">
+
+    <!-- Logo -->
+
+    <div class="logo">
+
+        <h1>AX Company</h1>
+
+        <p>
+            AI 업무 자동화 시스템
+        </p>
+
+    </div>
+
+
+    <!-- Login Form -->
+
+    <form
+        method="post"
+        action="/login"
+    >
+
+        <!-- Employee ID -->
+
+        <div class="form-group">
+
+            <label for="employeeId">
+                사번
+            </label>
+
+            <input
+                type="text"
+                id="employeeId"
+                name="employee_id"
+                placeholder="사번을 입력하세요"
+                value="E001"
+                required
+            >
+
+        </div>
+
+
+        <!-- Password -->
+
+        <div class="form-group">
+
+            <label for="password">
+                비밀번호
+            </label>
+
+            <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="비밀번호를 입력하세요"
+                value="1234"
+                required
+            >
+
+        </div>
+
+
+        <!-- Login Button -->
+
+        <button
+            type="submit"
+            class="login-button"
+        >
+            로그인
+        </button>
+
+    </form>
+
+
+    <!-- Demo Account -->
+
+    <div class="demo-account">
+
+        <div class="demo-account-title">
+            DEMO 계정
+        </div>
+
+        <div>
+            사번 :
+            <span>E001</span>
+        </div>
+
+        <div>
+            비밀번호 :
+            <span>1234</span>
+        </div>
+
+        <div>
+            사용자 :
+            <span>김철수</span>
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
