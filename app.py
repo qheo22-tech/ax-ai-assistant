@@ -1,10 +1,10 @@
 import gradio as gr
 
 from llm import answer_llm
-from image_tool import generate_image
 from langchain_core.prompts import ChatPromptTemplate
+
 from router import route_question
-from image_prompt import generate_image_prompt
+from leave_agent import handle_leave
 
 
 # ============================================================
@@ -46,27 +46,25 @@ def respond(message, history):
 
 
     # --------------------------------------------------------
-    # 2. Image
+    # 2. Leave Agent
     # --------------------------------------------------------
 
-    if route == "image":
+    if route == "leave":
 
-        prompt = generate_image_prompt(message)
+        response = handle_leave(message)
 
-        result = generate_image.invoke({
-            "prompt": prompt
-        })
+        print(f"[LEAVE AGENT] {response}")
 
-        return gr.ChatMessage( role="assistant", content=gr.Image(value=result) )
+        return format_leave_response(response)
+
 
     # --------------------------------------------------------
-    # 3. RAG
+    # 3. Unknown
     # --------------------------------------------------------
 
-    if route == "rag":
+    if route == "unknown":
 
-        # 아직 RAG 구현 전
-        return "RAG 요청으로 분류되었습니다."
+        return "요청을 정확히 이해하지 못했습니다. 어떤 업무를 원하시는지 조금 더 구체적으로 말씀해주세요."
 
 
     # --------------------------------------------------------
@@ -78,6 +76,60 @@ def respond(message, history):
     })
 
     return response
+
+
+# ============================================================
+# Leave Response → Gradio 출력
+# ============================================================
+
+def format_leave_response(response):
+
+    # --------------------------------------------------------
+    # 휴가 목록 조회
+    # --------------------------------------------------------
+
+    if response.get("type") == "leave_list":
+
+        lines = []
+
+        lines.append(
+            f"### {response['title']} ({response['count']}건)"
+        )
+
+        if response["count"] == 0:
+            lines.append("\n조회된 휴가가 없습니다.")
+            return "\n".join(lines)
+
+        for item in response["items"]:
+
+            lines.append(
+                f"""
+            **휴가 신청번호: {item['request_id']}**
+            - 신청자: {item['name']} ({item['employee_id']})
+            - 부서: {item['department']}
+            - 기간: {item['start_date']} ~ {item['end_date']}
+            - 휴가 일수: {item['leave_days']}일
+            - 사유: {item['reason']}
+            - 상태: {item['status']}
+            """
+            )
+
+        return "\n".join(lines)
+
+
+    # --------------------------------------------------------
+    # 승인 / 거절
+    # --------------------------------------------------------
+
+    if response.get("type") == "leave_action":
+
+        return response.get(
+            "message",
+            "휴가 업무가 처리되었습니다."
+        )
+
+
+    return "휴가 요청을 처리할 수 없습니다."
 
 
 # ============================================================
