@@ -2,14 +2,37 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from starlette.middleware.sessions import SessionMiddleware
+
 from datetime import date
 
 import psycopg2
+import uvicorn
+import gradio as gr
 
+from app import demo as ai_demo
+
+
+# ============================================================
+# FastAPI
+# ============================================================
 
 app = FastAPI()
 
-templates = Jinja2Templates(directory="templates")
+
+# ============================================================
+# Session
+# ============================================================
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="ax-company-secret-key"
+)
+
+
+templates = Jinja2Templates(
+    directory="templates"
+)
 
 
 # ============================================================
@@ -31,7 +54,10 @@ def get_db_connection():
 # 로그인 페이지
 # ============================================================
 
-@app.get("/", response_class=HTMLResponse)
+@app.get(
+    "/",
+    response_class=HTMLResponse
+)
 def login_page(request: Request):
 
     return templates.TemplateResponse(
@@ -47,23 +73,120 @@ def login_page(request: Request):
 
 @app.post("/login")
 def login(
+    request: Request,
     employee_id: str = Form(...),
     password: str = Form(...)
 ):
 
-    print(f"[LOGIN] employee_id={employee_id}")
+    print(
+        f"[LOGIN] employee_id={employee_id}"
+    )
 
-    # 현재 데모용
+
+    # --------------------------------------------------------
+    # 데모 비밀번호
+    # --------------------------------------------------------
+
     if password != "1234":
 
         return {
             "message": "로그인 실패"
         }
 
+
+    # --------------------------------------------------------
+    # 로그인 성공
+    # --------------------------------------------------------
+
+    request.session["employee_id"] = employee_id
+
+    print(
+        f"[LOGIN SUCCESS] employee_id={employee_id}"
+    )
+
+    print(
+        f"[SESSION] employee_id="
+        f"{request.session.get('employee_id')}"
+    )
+
+
+    # --------------------------------------------------------
+    # Dashboard 이동
+    # --------------------------------------------------------
+
     return RedirectResponse(
-        url=f"/mypage/{employee_id}",
+        url="/dashboard",
         status_code=303
     )
+
+
+# ============================================================
+# Dashboard
+# ============================================================
+
+@app.get(
+    "/dashboard",
+    response_class=HTMLResponse
+)
+def dashboard(
+    request: Request
+):
+
+    employee_id = request.session.get(
+        "employee_id"
+    )
+
+    print(
+        f"[DASHBOARD] employee_id={employee_id}"
+    )
+
+    if not employee_id:
+
+        return RedirectResponse(
+            url="/",
+            status_code=303
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            SELECT
+                employee_id,
+                name,
+                position
+            FROM employee
+            WHERE employee_id = %s
+            """,
+            (employee_id,)
+        )
+
+        employee = cursor.fetchone()
+
+        if not employee:
+
+            return RedirectResponse(
+                url="/",
+                status_code=303
+            )
+
+        return templates.TemplateResponse(
+            request=request,
+            name="dashboard.html",
+            context={
+                "employee_id": employee[0],
+                "employee_name": employee[1],
+                "employee_position": employee[2]
+            }
+        )
+
+    finally:
+
+        cursor.close()
+        conn.close()
 
 
 # ============================================================
@@ -71,136 +194,158 @@ def login(
 # ============================================================
 
 @app.get(
-    "/mypage/{employee_id}",
+    "/mypage",
     response_class=HTMLResponse
 )
-def mypage(
-    request: Request,
-    employee_id: str
-):
+def mypage(request: Request):
+
+    employee_id = request.session.get("employee_id")
+
+    if not employee_id:
+
+        return RedirectResponse(
+            url="/",
+            status_code=303
+        )
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # ============================================================
-    # 직원 정보 + 휴가 현황
-    # ============================================================
+    try:
 
-    cursor.execute(
-        """
-        SELECT
-            e.employee_id,
-            e.name,
-            e.department,
-            e.position,
-            e.email,
-            l.total_days,
-            l.used_days,
-            l.remaining_days
-        FROM employee e
-        JOIN leave_balance l
-          ON e.employee_id = l.employee_id
-        WHERE e.employee_id = %s
-        """,
-        (employee_id,)
-    )
+        cursor.execute(
+            """
+            SELECT
+                e.employee_id,
+                e.name,
+                e.department,
+                e.position,
+                e.email,
+                l.total_days,
+                l.used_days,
+                l.remaining_days
+            FROM employee e
+            JOIN leave_balance l
+              ON e.employee_id = l.employee_id
+            WHERE e.employee_id = %s
+            """,
+            (employee_id,)
+        )
 
-    employee = cursor.fetchone()
+        employee = cursor.fetchone()
 
-    if not employee:
+        if not employee:
+
+            return {
+                "message": "사용자를 찾을 수 없습니다."
+            }
+
+        data = {
+            "employee_id": employee[0],
+            "name": employee[1],
+            "department": employee[2],
+            "position": employee[3],
+            "email": employee[4],
+            "total_days": employee[5],
+            "used_days": employee[6],
+            "remaining_days": employee[7]
+        }
+
+
+        cursor.execute(
+            """
+            SELECT
+                request_id,
+                employee_id,
+                start_date,
+                end_date,
+                leave_days,
+                reason,
+                status,
+                created_at
+            FROM leave_request
+            WHERE employee_id = %s
+            ORDER BY created_at DESC
+            """,
+            (employee_id,)
+        )
+
+        rows = cursor.fetchall()
+
+        leave_requests = []
+
+        for row in rows:
+
+            leave_requests.append({
+                "request_id": row[0],
+                "employee_id": row[1],
+                "start_date": row[2],
+                "end_date": row[3],
+                "leave_days": row[4],
+                "reason": row[5],
+                "status": row[6],
+                "created_at": row[7]
+            })
+
+
+        return templates.TemplateResponse(
+            request=request,
+            name="mypage.html",
+            context={
+                "employee": data,
+                "leave_requests": leave_requests
+            }
+        )
+
+    finally:
 
         cursor.close()
         conn.close()
-
-        return {
-            "message": "사용자를 찾을 수 없습니다."
-        }
-
-
-    data = {
-        "employee_id": employee[0],
-        "name": employee[1],
-        "department": employee[2],
-        "position": employee[3],
-        "email": employee[4],
-        "total_days": employee[5],
-        "used_days": employee[6],
-        "remaining_days": employee[7]
-    }
-
-
-    # ============================================================
-    # 휴가 신청 이력 조회
-    # ============================================================
-
-    cursor.execute(
-        """
-        SELECT
-            request_id,
-            employee_id,
-            start_date,
-            end_date,
-            leave_days,
-            reason,
-            status,
-            created_at
-        FROM leave_request
-        WHERE employee_id = %s
-        ORDER BY created_at DESC
-        """,
-        (employee_id,)
-    )
-
-    rows = cursor.fetchall()
-
-    leave_requests = []
-
-    for row in rows:
-
-        leave_requests.append({
-            "request_id": row[0],
-            "employee_id": row[1],
-            "start_date": row[2],
-            "end_date": row[3],
-            "leave_days": row[4],
-            "reason": row[5],
-            "status": row[6],
-            "created_at": row[7]
-        })
-
-
-    cursor.close()
-    conn.close()
-
-
-    # ============================================================
-    # 마이페이지
-    # ============================================================
-
-    return templates.TemplateResponse(
-        request=request,
-        name="mypage.html",
-        context={
-            "employee": data,
-            "leave_requests": leave_requests
-        }
-    )
-
 
 
 # ============================================================
 # 휴가 신청
 # ============================================================
 
-@app.post("/leave/request/{employee_id}")
+@app.post(
+    "/leave/request"
+)
 def request_leave(
-    employee_id: str,
+    request: Request,
     start_date: str = Form(...),
     end_date: str = Form(...),
     reason: str = Form("")
 ):
 
+    # --------------------------------------------------------
+    # Session에서 로그인 사용자 가져오기
+    # --------------------------------------------------------
+
+    employee_id = request.session.get(
+        "employee_id"
+    )
+
+    print(
+        f"[LEAVE REQUEST SESSION] "
+        f"employee_id={employee_id}"
+    )
+
+
+    # --------------------------------------------------------
+    # 로그인 여부 확인
+    # --------------------------------------------------------
+
+    if not employee_id:
+
+        return RedirectResponse(
+            url="/",
+            status_code=303
+        )
+
+
     conn = get_db_connection()
+    cursor = None
+
 
     try:
 
@@ -208,11 +353,16 @@ def request_leave(
 
 
         # ----------------------------------------------------
-        # 문자열 날짜 → date 객체
+        # 날짜 변환
         # ----------------------------------------------------
 
-        start = date.fromisoformat(start_date)
-        end = date.fromisoformat(end_date)
+        start = date.fromisoformat(
+            start_date
+        )
+
+        end = date.fromisoformat(
+            end_date
+        )
 
 
         # ----------------------------------------------------
@@ -221,14 +371,18 @@ def request_leave(
 
         if end < start:
 
-            return "종료일은 시작일보다 빠를 수 없습니다."
+            return (
+                "종료일은 시작일보다 빠를 수 없습니다."
+            )
 
 
         # ----------------------------------------------------
-        # 휴가 일수 계산
+        # 휴가 일수
         # ----------------------------------------------------
 
-        leave_days = (end - start).days + 1
+        leave_days = (
+            end - start
+        ).days + 1
 
 
         # ----------------------------------------------------
@@ -263,12 +417,8 @@ def request_leave(
             )
         )
 
-
-        # ----------------------------------------------------
-        # COMMIT
-        # ----------------------------------------------------
-
         conn.commit()
+
 
         print(
             f"[LEAVE REQUEST] "
@@ -284,10 +434,143 @@ def request_leave(
 
         conn.rollback()
 
-        print("[LEAVE ERROR]", e)
+        print(
+            "[LEAVE ERROR]",
+            e
+        )
 
-        return "휴가 신청 중 오류가 발생했습니다."
+        return (
+            "휴가 신청 중 오류가 발생했습니다."
+        )
 
+
+    finally:
+
+        if cursor:
+
+            cursor.close()
+
+        conn.close()
+
+
+    # --------------------------------------------------------
+    # 신청 완료 → 휴가 관리 페이지
+    # --------------------------------------------------------
+
+    return RedirectResponse(
+        url="/leave",
+        status_code=303
+    )
+
+
+# ============================================================
+# 휴가 페이지
+# ============================================================
+
+@app.get(
+    "/leave",
+    response_class=HTMLResponse
+)
+def leave_page(request: Request):
+
+    employee_id = request.session.get("employee_id")
+
+    if not employee_id:
+
+        return RedirectResponse(
+            url="/",
+            status_code=303
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute(
+            """
+            SELECT
+                e.employee_id,
+                e.name,
+                e.department,
+                e.position,
+                e.email,
+                l.total_days,
+                l.used_days,
+                l.remaining_days
+            FROM employee e
+            JOIN leave_balance l
+              ON e.employee_id = l.employee_id
+            WHERE e.employee_id = %s
+            """,
+            (employee_id,)
+        )
+
+        employee = cursor.fetchone()
+
+        if not employee:
+
+            return {
+                "message": "사용자를 찾을 수 없습니다."
+            }
+
+
+        data = {
+            "employee_id": employee[0],
+            "name": employee[1],
+            "department": employee[2],
+            "position": employee[3],
+            "email": employee[4],
+            "total_days": employee[5],
+            "used_days": employee[6],
+            "remaining_days": employee[7]
+        }
+
+
+        cursor.execute(
+            """
+            SELECT
+                request_id,
+                employee_id,
+                start_date,
+                end_date,
+                leave_days,
+                reason,
+                status,
+                created_at
+            FROM leave_request
+            WHERE employee_id = %s
+            ORDER BY created_at DESC
+            """,
+            (employee_id,)
+        )
+
+        rows = cursor.fetchall()
+
+        leave_requests = []
+
+        for row in rows:
+
+            leave_requests.append({
+                "request_id": row[0],
+                "employee_id": row[1],
+                "start_date": row[2],
+                "end_date": row[3],
+                "leave_days": row[4],
+                "reason": row[5],
+                "status": row[6],
+                "created_at": row[7]
+            })
+
+
+        return templates.TemplateResponse(
+            request=request,
+            name="leave.html",
+            context={
+                "employee": data,
+                "leave_requests": leave_requests
+            }
+        )
 
     finally:
 
@@ -295,11 +578,25 @@ def request_leave(
         conn.close()
 
 
-    # --------------------------------------------------------
-    # 신청 완료 → 마이페이지
-    # --------------------------------------------------------
+# ============================================================
+# Gradio AI
+# ============================================================
 
-    return RedirectResponse(
-        url=f"/mypage/{employee_id}",
-        status_code=303
+app = gr.mount_gradio_app(
+    app,
+    ai_demo,
+    path="/ai"
+)
+
+
+# ============================================================
+# 서버 실행
+# ============================================================
+
+if __name__ == "__main__":
+
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=8000
     )

@@ -54,7 +54,37 @@ leave로 분류한다.
 "휴가는 보통 언제 써?" → general
 "안녕" → general
 
-의도가 불명확한 경우에만 unknown으로 분류한다.
+문맥 처리:
+
+현재 질문이 짧거나 이전 대화를 참조하는 표현을 포함하면
+이전 대화를 참고해서 분류한다.
+
+예:
+
+이전 대화:
+user: 내 휴가 목록 보여줘
+assistant: 내 휴가 목록을 조회했습니다.
+
+현재 질문:
+그중 승인된 것만 보여줘
+
+→ leave
+
+
+이전 대화:
+user: 내 휴가 목록 보여줘
+assistant: 내 휴가 목록을 조회했습니다.
+
+현재 질문:
+그중 대기중인 것만 보여줘
+
+→ leave
+
+
+"그중", "그것만", "이것만", "승인된 것", "대기중인 것",
+"거절된 것"처럼 이전 결과를 가리키는 표현은
+이전 대화와 연결해서 판단한다.
+
 
 반드시 다음 중 하나만 출력한다.
 
@@ -63,10 +93,16 @@ general
 unknown
 """
     ),
-    (
-        "human",
-        "{question}"
-    )
+        (
+            "human",
+            """
+        이전 대화:
+        {history}
+
+        현재 질문:
+        {question}
+        """
+        )
 ])
 
 
@@ -81,15 +117,28 @@ router_chain = router_prompt | answer_llm
 # Route Question
 # ============================================================
 
-def route_question(question: str):
+def route_question(question: str, messages=None):
+
+    history = ""
+
+    if messages:
+
+        history = "\n".join(
+            f"{message['role']}: {message['content']}"
+            for message in messages
+        )
 
     result = router_chain.invoke({
-        "question": question
+        "question": question,
+        "history": history
     })
 
+    print(f"[ROUTER HISTORY] {history}")
     print(f"[ROUTER RAW] {repr(result)}")
 
-    route = result.strip().lower()
+    route = result.content if hasattr(result, "content") else str(result)
+
+    route = route.strip().lower()
 
     if route.startswith("leave"):
         return "leave"

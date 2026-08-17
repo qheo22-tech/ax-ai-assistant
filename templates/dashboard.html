@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AX Company - Dashboard</title>
+
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+
+        html,
+        body {
+
+            margin: 0;
+
+            width: 100%;
+            height: 100%;
+
+            font-family: Arial, sans-serif;
+
+            background: #f4f6f8;
+
+        }
+
+
+        body {
+
+            overflow: hidden;
+
+        }
+
+
+        /* ====================================================
+           전체 Layout
+           ==================================================== */
+
+        .layout {
+
+            display: flex;
+
+            width: 100%;
+            height: 100vh;
+
+        }
+
+
+        /* ====================================================
+           Sidebar
+           ==================================================== */
+
+        .sidebar {
+
+            width: 240px;
+
+            flex-shrink: 0;
+
+            background: #222;
+
+            color: white;
+
+            padding: 30px 20px;
+
+            display: flex;
+
+            flex-direction: column;
+
+        }
+
+
+        /* ====================================================
+           Logo
+           ==================================================== */
+
+        .logo {
+
+            margin-bottom: 40px;
+
+        }
+
+
+        .logo h1 {
+
+            margin: 0;
+
+            font-size: 24px;
+
+        }
+
+
+        .logo p {
+
+            margin-top: 8px;
+
+            color: #aaa;
+
+            font-size: 13px;
+
+        }
+
+
+        /* ====================================================
+           Menu
+           ==================================================== */
+
+        .menu {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+        }
+
+
+        .menu-button {
+
+            width: 100%;
+
+            padding: 14px 15px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            background: transparent;
+
+            color: #ccc;
+
+            text-align: left;
+
+            font-size: 15px;
+
+            cursor: pointer;
+
+            transition: 0.2s;
+
+        }
+
+
+        .menu-button:hover {
+
+            background: #333;
+
+            color: white;
+
+        }
+
+
+        .menu-button.active {
+
+            background: #444;
+
+            color: white;
+
+        }
+
+
+        /* ====================================================
+           Main
+           ==================================================== */
+
+        .main {
+
+            flex: 1;
+
+            min-width: 0;
+
+            display: flex;
+
+            flex-direction: column;
+
+        }
+
+
+        /* ====================================================
+           Header
+           ==================================================== */
+
+        .header {
+
+            height: 70px;
+
+            flex-shrink: 0;
+
+            background: white;
+
+            border-bottom: 1px solid #eee;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            padding: 0 30px;
+
+        }
+
+
+        .header-title {
+
+            font-size: 20px;
+
+            font-weight: bold;
+
+            color: #222;
+
+        }
+
+
+        .header-right {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 15px;
+
+        }
+
+
+        .user-info {
+
+            color: #555;
+
+            font-size: 14px;
+
+        }
+
+
+        /* ====================================================
+           Logout
+           ==================================================== */
+
+        .logout-button {
+
+            padding: 8px 15px;
+
+            border: 1px solid #ddd;
+
+            border-radius: 6px;
+
+            background: white;
+
+            color: #444;
+
+            font-size: 13px;
+
+            cursor: pointer;
+
+        }
+
+
+        .logout-button:hover {
+
+            background: #f3f3f3;
+
+        }
+
+
+        /* ====================================================
+           Content
+           ==================================================== */
+
+        .content {
+
+            flex: 1;
+
+            min-height: 0;
+
+            padding: 20px;
+
+            position: relative;
+
+        }
+
+
+        /* ====================================================
+           iframe
+           ==================================================== */
+
+        .content-frame {
+
+            width: 100%;
+
+            height: 100%;
+
+            border: none;
+
+            border-radius: 10px;
+
+            background: white;
+
+            box-shadow:
+                0 4px 20px rgba(0, 0, 0, 0.05);
+
+        }
+    </style>
+
+</head>
+
+
+<body>
+
+
+    <div class="layout">
+
+
+        <!-- ====================================================
+         Sidebar
+         ==================================================== -->
+
+        <aside class="sidebar">
+
+
+            <!-- Logo -->
+
+            <div class="logo">
+
+                <h1>
+                    AX Company
+                </h1>
+
+                <p>
+                    AI 업무 자동화 시스템
+                </p>
+
+            </div>
+
+
+            <!-- =================================================
+             Menu
+             ================================================= -->
+
+            <div class="menu">
+
+
+                <!-- AI -->
+
+                <button id="aiMenu" class="menu-button active" onclick="loadPage('ai', this, 'AI 업무비서')">
+                    AI 업무비서
+                </button>
+
+
+                <!-- My Page -->
+
+                <button id="mypageMenu" class="menu-button" onclick="loadPage('mypage', this, '마이페이지')">
+                    마이페이지
+                </button>
+
+
+                <!-- Leave -->
+
+                <button id="leaveMenu" class="menu-button" onclick="loadPage('leave', this, '휴가 관리')">
+                    휴가 관리
+                </button>
+
+
+            </div>
+
+
+        </aside>
+
+
+
+        <!-- ====================================================
+         Main
+         ==================================================== -->
+
+        <main class="main">
+
+
+            <!-- =================================================
+             Header
+             ================================================= -->
+
+            <header class="header">
+
+
+                <div id="pageTitle" class="header-title">
+                    AI 업무비서
+                </div>
+
+
+                <div class="header-right">
+
+                    <span class="user-info">
+
+                        {{ employee_name }}
+                        ·
+                        {{ employee_position }}
+                        ·
+                        {{ employee_id }}
+
+                    </span>
+
+                    <button class="logout-button" onclick="logout()">
+                        로그아웃
+                    </button>
+
+                </div>
+
+
+            </header>
+
+
+
+            <!-- =================================================
+             Content
+             ================================================= -->
+
+            <div class="content">
+
+
+                <!-- =================================================
+                 AI
+
+                 처음 로딩되고 이후에는 숨겼다 다시 보여줌.
+                 iframe 자체를 제거하지 않기 때문에
+                 Gradio 대화 내용이 유지됨.
+                 ================================================= -->
+
+                <iframe id="aiFrame" src="/ai" class="content-frame" title="AI 업무비서">
+                </iframe>
+
+
+                <!-- =================================================
+                 My Page
+                 ================================================= -->
+
+                <iframe id="mypageFrame" src="/mypage" class="content-frame" title="마이페이지" style="display: none;">
+                </iframe>
+
+
+                <!-- =================================================
+                 Leave
+                 ================================================= -->
+
+                <iframe id="leaveFrame" src="/leave" class="content-frame" title="휴가 관리" style="display: none;">
+                </iframe>
+
+
+            </div>
+
+
+        </main>
+
+
+    </div>
+
+
+
+    <script>
+
+
+        // ========================================================
+        // 페이지 이동
+        // ========================================================
+
+        function loadPage(
+            page,
+            button,
+            title
+        ) {
+
+
+            // ----------------------------------------------------
+            // iframe 가져오기
+            // ----------------------------------------------------
+
+            const aiFrame =
+                document.getElementById(
+                    "aiFrame"
+                );
+
+
+            const mypageFrame =
+                document.getElementById(
+                    "mypageFrame"
+                );
+
+
+            const leaveFrame =
+                document.getElementById(
+                    "leaveFrame"
+                );
+
+
+            // ----------------------------------------------------
+            // 모든 iframe 숨김
+            // ----------------------------------------------------
+
+            aiFrame.style.display = "none";
+
+            mypageFrame.style.display = "none";
+
+            leaveFrame.style.display = "none";
+
+
+            // ----------------------------------------------------
+            // 선택한 iframe 표시
+            // ----------------------------------------------------
+
+            if (page === "ai") {
+
+                aiFrame.style.display = "block";
+
+            }
+
+
+            else if (page === "mypage") {
+
+                mypageFrame.style.display = "block";
+
+            }
+
+
+            else if (page === "leave") {
+
+                leaveFrame.style.display = "block";
+
+            }
+
+
+            // ----------------------------------------------------
+            // Header 제목
+            // ----------------------------------------------------
+
+            document.getElementById(
+                "pageTitle"
+            ).textContent = title;
+
+
+            // ----------------------------------------------------
+            // 모든 메뉴 active 제거
+            // ----------------------------------------------------
+
+            const buttons =
+                document.querySelectorAll(
+                    ".menu-button"
+                );
+
+
+            buttons.forEach(
+                function (item) {
+
+                    item.classList.remove(
+                        "active"
+                    );
+
+                }
+            );
+
+
+            // ----------------------------------------------------
+            // 현재 메뉴 active
+            // ----------------------------------------------------
+
+            button.classList.add(
+                "active"
+            );
+
+        }
+
+
+
+        // ========================================================
+        // 로그아웃
+        // ========================================================
+
+        function logout() {
+
+
+            const confirmed =
+                confirm(
+                    "로그아웃하시겠습니까?"
+                );
+
+
+            if (!confirmed) {
+
+                return;
+
+            }
+
+
+            location.href = "/";
+
+        }
+
+
+    </script>
+
+
+</body>
+
+</html>
