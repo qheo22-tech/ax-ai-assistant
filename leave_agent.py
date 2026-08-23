@@ -40,57 +40,91 @@ from leave_formatter import convert_leave_items
 def handle_leave(
     question: str,
     actor_employee_id: str,
+    request_id: int = None,
+    previous_action: str = None,
+    messages=None,
 ):
+# ========================================================
+# STEP 1
+# 자연어 → JSON
+# ========================================================
 
-    # ========================================================
-    # STEP 1
-    # 자연어 → JSON
-    # ========================================================
+    if request_id is not None:
 
-    raw_result = leave_action_chain.invoke({
-        "question": question
-    })
+        # 이전 승인/거절 요청에 대한
+        # 신청번호 선택이므로 LLM을 호출하지 않는다.
+        action_data = {
+            "action": previous_action,
+            "scope": "employee",
+            "request_id": request_id,
+            "status": None,
+            "employee_name": None,
+            "employee_id": None,
+            "start_date": None,
+            "end_date": None,
+            "balance_type": None
+        }
 
-    print("[LEAVE ACTION RAW]")
-    print(repr(raw_result))
+        print("[LEAVE FOLLOWUP]")
+        print(action_data)
 
+    else:
+        history = ""
 
-    # ========================================================
-    # STEP 2
-    # JSON 파싱
-    # ========================================================
-
-    try:
-
-        action_data = parse_action_result(
-            raw_result
-        )
-
-    except Exception as e:
-
-        print("[LEAVE ACTION ERROR]")
-        print(e)
-
-        return LeaveResponse(
-
-            type="leave_action",
-
-            action="query",
-
-            title="휴가 요청 처리 실패",
-
-            count=0,
-
-            items=[],
-
-            success=False,
-
-            message=(
-                "휴가 요청을 정확하게 "
-                "분석하지 못했습니다."
+        if messages:
+            history = "\n".join(
+                f"{message['role']}: {message['content']}"
+                for message in messages
             )
 
-        ).model_dump()
+        raw_result = leave_action_chain.invoke({
+            "question": question,
+            "history": history
+        })
+
+        print("[LEAVE HISTORY]")
+        print(history)
+
+        print("[LEAVE ACTION RAW]")
+        print(repr(raw_result))
+
+
+        # ========================================================
+        # STEP 2
+        # JSON 파싱
+        # ========================================================
+
+        try:
+
+            action_data = parse_action_result(
+                raw_result
+            )
+
+        except Exception as e:
+
+            print("[LEAVE ACTION ERROR]")
+            print(e)
+
+            return LeaveResponse(
+
+                type="leave_action",
+
+                action="query",
+
+                title="휴가 요청 처리 실패",
+
+                count=0,
+
+                items=[],
+
+                success=False,
+
+                message=(
+                    "휴가 요청을 정확하게 "
+                    "분석하지 못했습니다."
+                )
+
+            ).model_dump()
 
 
     # ========================================================

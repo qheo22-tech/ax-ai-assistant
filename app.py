@@ -31,6 +31,7 @@ answer_prompt = ChatPromptTemplate.from_messages([
 
 answer_chain = answer_prompt | answer_llm
 
+
 # ============================================================
 # Conversation Memory
 # ============================================================
@@ -46,6 +47,7 @@ answer_chain = answer_prompt | answer_llm
 # E003 → Memory
 #
 # 사용자별로 대화가 섞이지 않도록 분리한다.
+
 conversation_memories = {}
 
 
@@ -127,7 +129,7 @@ def respond(
 
 
     # --------------------------------------------------------
-    # 3. 사용자 질문 Memory 저장
+    # 3. 현재 사용자 질문 Memory 저장
     # --------------------------------------------------------
 
     memory.add_user(
@@ -135,23 +137,75 @@ def respond(
     )
 
 
-    print("[MEMORY USER]")
+    # 현재 질문까지 포함된 전체 memory
+    messages = memory.get_messages()
 
-    print(
-        memory.get_messages()
-    )
+
+    # 현재 질문은 question 인자로 별도 전달되므로
+    # history에는 이전 대화만 전달한다.
+    previous_messages = messages[:-1]
+
+
+    print("[MEMORY USER]")
+    print(messages)
+
+    print("[PREVIOUS MESSAGES]")
+    print(previous_messages)
 
 
     # --------------------------------------------------------
     # 4. Router
     # --------------------------------------------------------
 
-    messages = memory.get_messages()
+    last_result = memory.get_last_result()
 
-    route = route_question(
-        message,
-        messages
-    )
+
+    # 승인 / 거절 후속 선택 입력용
+    followup_request_id = None
+    previous_action = None
+
+
+    # --------------------------------------------------------
+    # 이전 승인/거절 요청에서
+    # 신청번호 선택을 기다리는 상태인지 확인
+    # --------------------------------------------------------
+
+    if (
+        last_result
+        and last_result.get("type") == "leave_action"
+        and last_result.get("action") in ("approve", "reject")
+        and last_result.get("success") is False
+        and last_result.get("items")
+        and message.strip().isdigit()
+    ):
+
+        followup_request_id = int(
+            message.strip()
+        )
+
+        previous_action = last_result.get(
+            "action"
+        )
+
+        route = "leave"
+
+        print(
+            f"[ROUTER BYPASS] "
+            f"{message} -> leave, "
+            f"action={previous_action}, "
+            f"request_id={followup_request_id}"
+        )
+
+
+    else:
+
+        # 현재 질문은 message로 전달하고
+        # 이전 대화만 previous_messages로 전달한다.
+        route = route_question(
+            message,
+            previous_messages
+        )
+
 
     print(
         f"[ROUTER] {message} -> {route}"
@@ -161,6 +215,7 @@ def respond(
     # --------------------------------------------------------
     # 5. Leave Agent
     # --------------------------------------------------------
+
     if route == "leave":
 
         print(
@@ -168,22 +223,38 @@ def respond(
             f"employee_id={current_user_id}"
         )
 
+
         response = handle_leave(
             message,
-            current_user_id
+            current_user_id,
+            request_id=followup_request_id,
+            previous_action=previous_action,
+            messages=previous_messages
         )
+
 
         print("[RESPOND RESPONSE]")
         print(response)
+
+
+        # ----------------------------------------------------
+        # 마지막 Leave 결과 저장
+        # ----------------------------------------------------
 
         memory.set_last_result(
             response
         )
 
+
         print("[MEMORY LAST RESULT]")
         print(
             memory.get_last_result()
         )
+
+
+        # ----------------------------------------------------
+        # Gradio 출력 형태로 변환
+        # ----------------------------------------------------
 
         print("[BEFORE FORMAT]")
 
@@ -194,20 +265,48 @@ def respond(
         print("[AFTER FORMAT]")
         print(formatted)
 
+
+        # ----------------------------------------------------
+        # 중요:
+        # 휴가 Agent 응답도 대화 Memory에 저장한다.
+        #
+        # 그래야 다음 질문에서
+        # "그중", "그거", "승인된 것만"
+        # 같은 문맥을 사용할 수 있다.
+        # ----------------------------------------------------
+
+        memory.add_assistant(
+            formatted
+        )
+
+
+        print("[MEMORY AFTER LEAVE]")
+        print(
+            memory.get_messages()
+        )
+
+
         return formatted
+
 
     # --------------------------------------------------------
     # 6. Unknown
     # --------------------------------------------------------
+
     if route == "unknown":
+
         response = (
             "요청을 정확히 이해하지 못했습니다. "
             "어떤 업무를 원하시는지 조금 더 구체적으로 "
             "말씀해주세요."
         )
+
+
         memory.add_assistant(
             response
         )
+
+
         return response
 
 
@@ -221,7 +320,7 @@ def respond(
 
 
     # --------------------------------------------------------
-    # 일반 답변 Memory 저장
+    # 일반 답변 문자열 추출
     # --------------------------------------------------------
 
     if hasattr(response, "content"):
@@ -233,12 +332,39 @@ def respond(
         assistant_message = str(response)
 
 
+    # --------------------------------------------------------
+    # 일반 답변 Memory 저장
+    # --------------------------------------------------------
+
     memory.add_assistant(
         assistant_message
     )
 
 
     return assistant_message
+
+
+# ============================================================
+# 상태값 한글 표시
+# ============================================================
+
+def get_status_display(status):
+
+    status_labels = {
+        "PENDING": "대기",
+        "APPROVED": "승인",
+        "REJECTED": "거절"
+    }
+
+    label = status_labels.get(
+        status,
+        status
+    )
+
+    return f"{status} ({label})"
+
+
+
 
 
 # ============================================================
@@ -255,42 +381,116 @@ def format_leave_response(response):
 
         lines = []
 
+
         lines.append(
-            f"### {response['title']} ({response['count']}건)"
+            f"### {response['title']} "
+            f"({response['count']}건)"
         )
+
 
         if response["count"] == 0:
-            lines.append("\n조회된 휴가가 없습니다.")
+
+            lines.append(
+                "\n조회된 휴가가 없습니다."
+            )
+
             return "\n".join(lines)
 
+
         lines.append(
-            "\n| 신청번호 | 신청자 | 부서 | 기간 | 일수 | 사유 | 상태 |"
+            "\n"
+            "| 신청번호 | 신청자 | 부서 | 기간 | "
+            "일수 | 사유 | 상태 |"
         )
+
+
         lines.append(
             "|---|---|---|---|---:|---|---|"
         )
 
+
         for item in response["items"]:
+
+            status_display = get_status_display(
+                item["status"]
+            )
 
             lines.append(
                 f"| {item['request_id']} "
-                f"| {item['name']} ({item['employee_id']}) "
+                f"| {item['name']} "
+                f"({item['employee_id']}) "
                 f"| {item['department']} "
-                f"| {item['start_date']} ~ {item['end_date']} "
+                f"| {item['start_date']} ~ "
+                f"{item['end_date']} "
                 f"| {item['leave_days']}일 "
                 f"| {item['reason']} "
-                f"| {item['status']} |"
+                f"| {status_display} |"
             )
+
 
         return "\n".join(lines)
 
 
     # --------------------------------------------------------
-    # 승인 / 거절
+    # 승인 / 거절 / 신청 / 잔여일수 등
     # --------------------------------------------------------
 
     if response.get("type") == "leave_action":
 
+        # ----------------------------------------------------
+        # 승인/거절 대상 선택처럼
+        # items가 같이 넘어오는 경우
+        # 목록도 함께 출력한다.
+        # ----------------------------------------------------
+
+        if response.get("items"):
+
+            lines = []
+
+
+            lines.append(
+                response.get(
+                    "message",
+                    "처리할 항목을 선택해주세요."
+                )
+            )
+
+
+            lines.append(
+                "\n"
+                "| 신청번호 | 신청자 | 부서 | 기간 | "
+                "일수 | 사유 | 상태 |"
+            )
+
+
+            lines.append(
+                "|---|---|---|---|---:|---|---|"
+            )
+
+
+            for item in response["items"]:
+
+                status_display = get_status_display(
+                    item["status"]
+                )
+
+                lines.append(
+                    f"| {item['request_id']} "
+                    f"| {item['name']} "
+                    f"({item['employee_id']}) "
+                    f"| {item['department']} "
+                    f"| {item['start_date']} ~ "
+                    f"{item['end_date']} "
+                    f"| {item['leave_days']}일 "
+                    f"| {item['reason']} "
+                    f"| {status_display} |"
+                )
+
+
+            return "\n".join(lines)
+
+
+        # 일반 leave_action 응답
         return response.get(
             "message",
             "휴가 업무가 처리되었습니다."
@@ -318,6 +518,7 @@ css = """
     min-height: 700px !important;
 }
 """
+
 
 demo = gr.ChatInterface(
     fn=respond,

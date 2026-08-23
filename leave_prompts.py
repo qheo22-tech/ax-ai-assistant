@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from llm import answer_llm
 
+
 leave_action_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
@@ -59,6 +60,108 @@ reject
 - 휴가 신청 거절
 - 휴가 거절
 - 휴가 거절해줘
+
+
+============================================================
+이전 대화 문맥 처리
+============================================================
+
+현재 질문이 이전 대화를 가리키는 표현을 포함하거나,
+현재 질문만으로 대상이나 조건이 충분하지 않은 경우
+이전 대화를 참고해서 누락된 조건을 보완한다.
+
+예를 들어 다음 표현은 이전 문맥을 참고할 수 있다.
+
+- 그중
+- 그것만
+- 이것만
+- 승인된 것만
+- 대기 중인 것만
+- 거절된 것만
+- 그 사람
+- 그 직원
+- 그거
+- 그 휴가
+
+예:
+
+이전 대화:
+user: E001 휴가 목록 보여줘
+assistant: E001 휴가 목록을 조회했습니다.
+
+현재 질문:
+승인된 것만 보여줘
+
+출력:
+
+{{
+    "action": "query",
+    "scope": "employee",
+    "request_id": null,
+    "status": "APPROVED",
+    "employee_name": null,
+    "employee_id": "E001",
+    "start_date": null,
+    "end_date": null,
+    "balance_type": null
+}}
+
+
+예:
+
+이전 대화:
+user: 팀원 휴가 목록 보여줘
+assistant: 팀원 휴가 목록을 조회했습니다.
+
+현재 질문:
+그중 대기 중인 것만 보여줘
+
+출력:
+
+{{
+    "action": "query",
+    "scope": "team",
+    "request_id": null,
+    "status": "PENDING",
+    "employee_name": null,
+    "employee_id": null,
+    "start_date": null,
+    "end_date": null,
+    "balance_type": null
+}}
+
+
+중요:
+
+현재 질문에서 새로운 조건을 명확하게 지정한 경우
+현재 질문의 조건을 우선한다.
+
+현재 질문이 이전 대화와 관계없는 독립적인 요청이라면
+이전 대화의 조건을 임의로 가져오지 않는다.
+
+예:
+
+이전 대화:
+user: E001 휴가 목록 보여줘
+
+현재 질문:
+내 남은 휴가 며칠이야?
+
+이 경우 이전 employee_id인 E001을 가져오지 않는다.
+
+출력:
+
+{{
+    "action": "balance",
+    "scope": "self",
+    "request_id": null,
+    "status": null,
+    "employee_name": null,
+    "employee_id": null,
+    "start_date": null,
+    "end_date": null,
+    "balance_type": "remaining"
+}}
 
 
 ============================================================
@@ -158,6 +261,7 @@ BALANCE 예시
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -175,6 +279,7 @@ BALANCE 예시
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -192,6 +297,7 @@ BALANCE 예시
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -209,6 +315,7 @@ BALANCE 예시
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -226,6 +333,7 @@ BALANCE 예시
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -452,6 +560,7 @@ balance_type은 휴가 신청에서는 항상 null이다.
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -470,6 +579,7 @@ balance_type은 휴가 신청에서는 항상 null이다.
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -488,6 +598,7 @@ balance_type은 휴가 신청에서는 항상 null이다.
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": "2026-08-25",
     "end_date": "2026-08-26",
@@ -579,6 +690,7 @@ Agent가 DB를 조회하여 실제 employee_id를 확인한다.
     "scope": "self",
     "request_id": 6,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -600,6 +712,7 @@ QUERY 예시
     "scope": "self",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -617,6 +730,7 @@ QUERY 예시
     "scope": "self",
     "request_id": null,
     "status": "PENDING",
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -634,6 +748,7 @@ QUERY 예시
     "scope": "self",
     "request_id": null,
     "status": "APPROVED",
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -651,6 +766,7 @@ QUERY 예시
     "scope": "self",
     "request_id": null,
     "status": "REJECTED",
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -668,6 +784,7 @@ QUERY 예시
     "scope": "team",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -685,6 +802,7 @@ QUERY 예시
     "scope": "team",
     "request_id": null,
     "status": "PENDING",
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -702,6 +820,7 @@ QUERY 예시
     "scope": "all",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": null,
     "start_date": null,
     "end_date": null,
@@ -719,6 +838,7 @@ QUERY 예시
     "scope": "employee",
     "request_id": null,
     "status": null,
+    "employee_name": null,
     "employee_id": "E001",
     "start_date": null,
     "end_date": null,
@@ -757,8 +877,15 @@ balance_type
     ),
     (
         "human",
-        "{question}"
+        """
+이전 대화:
+{history}
+
+현재 질문:
+{question}
+"""
     )
 ])
+
 
 leave_action_chain = leave_action_prompt | answer_llm
