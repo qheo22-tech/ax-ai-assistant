@@ -1,3 +1,12 @@
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv(".env.local")
+
+
+
+
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -42,11 +51,11 @@ templates = Jinja2Templates(
 def get_db_connection():
 
     return psycopg2.connect(
-        host="127.0.0.1",
-        port=5432,
-        database="ax_company",
-        user="axuser",
-        password="axpassword"
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=os.getenv("DB_NAME", "ax_company"),
+        user=os.getenv("DB_USER", "axuser"),
+        password=os.getenv("DB_PASSWORD", "axpassword")
     )
 
 
@@ -82,7 +91,6 @@ def login(
         f"[LOGIN] employee_id={employee_id}"
     )
 
-
     # --------------------------------------------------------
     # 데모 비밀번호
     # --------------------------------------------------------
@@ -92,7 +100,6 @@ def login(
         return {
             "message": "로그인 실패"
         }
-
 
     # --------------------------------------------------------
     # 로그인 성공
@@ -108,7 +115,6 @@ def login(
         f"[SESSION] employee_id="
         f"{request.session.get('employee_id')}"
     )
-
 
     # --------------------------------------------------------
     # Dashboard 이동
@@ -251,7 +257,6 @@ def mypage(request: Request):
             "remaining_days": employee[7]
         }
 
-
         cursor.execute(
             """
             SELECT
@@ -287,7 +292,6 @@ def mypage(request: Request):
                 "created_at": row[7]
             })
 
-
         return templates.TemplateResponse(
             request=request,
             name="mypage.html",
@@ -317,10 +321,6 @@ def request_leave(
     reason: str = Form("")
 ):
 
-    # --------------------------------------------------------
-    # Session에서 로그인 사용자 가져오기
-    # --------------------------------------------------------
-
     employee_id = request.session.get(
         "employee_id"
     )
@@ -330,11 +330,6 @@ def request_leave(
         f"employee_id={employee_id}"
     )
 
-
-    # --------------------------------------------------------
-    # 로그인 여부 확인
-    # --------------------------------------------------------
-
     if not employee_id:
 
         return RedirectResponse(
@@ -342,19 +337,12 @@ def request_leave(
             status_code=303
         )
 
-
     conn = get_db_connection()
     cursor = None
-
 
     try:
 
         cursor = conn.cursor()
-
-
-        # ----------------------------------------------------
-        # 날짜 변환
-        # ----------------------------------------------------
 
         start = date.fromisoformat(
             start_date
@@ -364,30 +352,15 @@ def request_leave(
             end_date
         )
 
-
-        # ----------------------------------------------------
-        # 날짜 검증
-        # ----------------------------------------------------
-
         if end < start:
 
             return (
                 "종료일은 시작일보다 빠를 수 없습니다."
             )
 
-
-        # ----------------------------------------------------
-        # 휴가 일수
-        # ----------------------------------------------------
-
         leave_days = (
             end - start
         ).days + 1
-
-
-        # ----------------------------------------------------
-        # DB INSERT
-        # ----------------------------------------------------
 
         cursor.execute(
             """
@@ -419,7 +392,6 @@ def request_leave(
 
         conn.commit()
 
-
         print(
             f"[LEAVE REQUEST] "
             f"employee={employee_id}, "
@@ -428,7 +400,6 @@ def request_leave(
             f"days={leave_days}, "
             f"reason={reason}"
         )
-
 
     except Exception as e:
 
@@ -443,19 +414,12 @@ def request_leave(
             "휴가 신청 중 오류가 발생했습니다."
         )
 
-
     finally:
 
         if cursor:
-
             cursor.close()
 
         conn.close()
-
-
-    # --------------------------------------------------------
-    # 신청 완료 → 휴가 관리 페이지
-    # --------------------------------------------------------
 
     return RedirectResponse(
         url="/leave",
@@ -514,7 +478,6 @@ def leave_page(request: Request):
                 "message": "사용자를 찾을 수 없습니다."
             }
 
-
         data = {
             "employee_id": employee[0],
             "name": employee[1],
@@ -525,7 +488,6 @@ def leave_page(request: Request):
             "used_days": employee[6],
             "remaining_days": employee[7]
         }
-
 
         cursor.execute(
             """
@@ -562,7 +524,6 @@ def leave_page(request: Request):
                 "created_at": row[7]
             })
 
-
         return templates.TemplateResponse(
             request=request,
             name="leave.html",
@@ -597,6 +558,6 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8000
     )

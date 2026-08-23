@@ -161,7 +161,6 @@ def respond(
     # --------------------------------------------------------
     # 5. Leave Agent
     # --------------------------------------------------------
-
     if route == "leave":
 
         print(
@@ -169,55 +168,46 @@ def respond(
             f"employee_id={current_user_id}"
         )
 
-
         response = handle_leave(
             message,
             current_user_id
         )
 
-
-        print(
-            f"[LEAVE AGENT] {response}"
-        )
-
-
-        # ----------------------------------------------------
-        # 마지막 업무 결과 저장
-        # ----------------------------------------------------
+        print("[RESPOND RESPONSE]")
+        print(response)
 
         memory.set_last_result(
             response
         )
 
-
         print("[MEMORY LAST RESULT]")
-
         print(
             memory.get_last_result()
         )
 
+        print("[BEFORE FORMAT]")
 
-        return format_leave_response(
+        formatted = format_leave_response(
             response
         )
 
+        print("[AFTER FORMAT]")
+        print(formatted)
+
+        return formatted
 
     # --------------------------------------------------------
     # 6. Unknown
     # --------------------------------------------------------
-
     if route == "unknown":
-
         response = (
             "요청을 정확히 이해하지 못했습니다. "
             "어떤 업무를 원하시는지 조금 더 구체적으로 "
             "말씀해주세요."
         )
-
         memory.add_assistant(
             response
         )
-
         return response
 
 
@@ -248,7 +238,7 @@ def respond(
     )
 
 
-    return response
+    return assistant_message
 
 
 # ============================================================
@@ -331,5 +321,22 @@ css = """
 
 demo = gr.ChatInterface(
     fn=respond,
-    title="AI Assistant"
+    title="AI Assistant",
+    description="""
+**AX Company AI Assistant**
+
+사내 휴가 관련 업무를 지원하는 AI Agent입니다.
+
+### 사용 예시
+- 남은 휴가가 며칠이야?
+- 신청휴가 보여줘
+- 승인된 휴가만 보여줘
+- 거절된 휴가만 보여줘
+- 전체 휴가 목록 보여줘
+- 휴가 신청 해줘
+""",
+    textbox=gr.Textbox(
+        placeholder="휴가 관련 질문을 입력해주세요.",
+        container=False
+    )
 )

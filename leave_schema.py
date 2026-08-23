@@ -10,22 +10,24 @@ class LeaveAction(BaseModel):
 
     action: Literal[
         "query",
+        "request",
         "approve",
-        "reject"
+        "reject",
+        "balance"
     ]
 
     request_id: Optional[int] = None
 
     status: Optional[str] = None
 
-    # 조회 범위
+
+    # 조회/처리 대상 범위
     #
     # self     = 본인 휴가
     # team     = 팀/부서 휴가
     # all      = 전체 휴가
     # employee = 특정 직원 휴가
-    #
-    # 기본값은 self
+    
     scope: Literal[
         "self",
         "team",
@@ -33,11 +35,18 @@ class LeaveAction(BaseModel):
         "employee"
     ] = "self"
 
+    employee_name: Optional[str] = None
+    
     employee_id: Optional[str] = None
 
     start_date: Optional[str] = None
 
     end_date: Optional[str] = None
+
+        # 휴가 잔여/사용/전체 구분
+    balance_type: Optional[
+        Literal["total", "used", "remaining"]
+    ] = None
 
 
 # ============================================================
@@ -80,8 +89,10 @@ class LeaveResponse(BaseModel):
 
     action: Literal[
         "query",
+        "request",
         "approve",
-        "reject"
+        "reject",
+        "balance"
     ]
 
     title: str

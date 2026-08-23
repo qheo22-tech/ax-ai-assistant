@@ -429,7 +429,7 @@
                  Gradio 대화 내용이 유지됨.
                  ================================================= -->
 
-                <iframe id="aiFrame" src="/ai" class="content-frame" title="AI 업무비서">
+                <iframe id="aiFrame" src="/ai/" class="content-frame" title="AI 업무비서">
                 </iframe>
 
 
@@ -525,6 +525,8 @@
 
 
             else if (page === "leave") {
+
+                leaveFrame.src = "/leave";
 
                 leaveFrame.style.display = "block";
 

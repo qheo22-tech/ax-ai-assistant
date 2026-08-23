@@ -1,3 +1,4 @@
+import os
 import psycopg2
 
 from typing import Optional, Literal
@@ -12,12 +13,13 @@ from langchain_core.tools import tool
 def get_db_connection():
 
     return psycopg2.connect(
-        host="127.0.0.1",
-        port=5432,
-        database="ax_company",
-        user="axuser",
-        password="axpassword"
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=os.getenv("DB_NAME", "ax_company"),
+        user=os.getenv("DB_USER", "axuser"),
+        password=os.getenv("DB_PASSWORD", "axpassword")
     )
+
 
 
 # ============================================================
@@ -60,7 +62,7 @@ def get_leave_requests(
 
     actor_employee_id: str = None,
 
-    scope: Optional[Literal["self", "team", "all"]] = "self"
+    scope: Optional[Literal["self", "team", "all","employee"]] = "self"
 ):
     """
     로그인한 사용자의 권한에 따라 휴가 신청 데이터를 조회한다.
@@ -1086,4 +1088,430 @@ def reject_leave(
         if cursor:
             cursor.close()
 
+        conn.close()
+
+
+# ============================================================
+# 휴가 신청
+# ============================================================
+
+@tool
+def request_leave(
+    start_date: str,
+    end_date: str,
+    reason: str = "",
+    actor_employee_id: str = None
+):
+    """
+    로그인한 사용자가 휴가를 신청한다.
+
+    start_date:
+        휴가 시작일. YYYY-MM-DD 형식
+
+    end_date:
+        휴가 종료일. YYYY-MM-DD 형식
+
+    reason:
+        휴가 사유
+
+    actor_employee_id:
+        로그인한 사용자 ID
+
+    신청 상태:
+        PENDING
+    """
+
+    from datetime import date
+
+    conn = get_db_connection()
+    cursor = None
+
+    try:
+
+        cursor = conn.cursor()
+
+        # ====================================================
+        # 1. 로그인 사용자 확인
+        # ====================================================
+
+        actor = get_actor(
+            cursor,
+            actor_employee_id
+        )
+
+        if not actor:
+
+            return {
+                "success": False,
+                "message": "로그인 사용자를 찾을 수 없습니다."
+            }
+
+        actor_id = actor[0]
+        actor_name = actor[1]
+
+
+        # ====================================================
+        # 2. 날짜 형식 및 존재 여부 확인
+        # ====================================================
+
+        try:
+
+            start = date.fromisoformat(
+                start_date
+            )
+
+            end = date.fromisoformat(
+                end_date
+            )
+
+        except ValueError:
+
+            return {
+                "success": False,
+                "message": (
+                    "올바른 날짜를 입력해주세요. "
+                    "YYYY-MM-DD 형식이어야 합니다."
+                )
+            }
+
+
+        # ====================================================
+        # 3. 과거 날짜 확인
+        # ====================================================
+
+        today = date.today()
+
+        if start < today:
+
+            return {
+                "success": False,
+                "message": (
+                    f"지난 날짜에는 휴가를 신청할 수 없습니다. "
+                    f"신청 가능 날짜: {today}"
+                )
+            }
+
+
+        # ====================================================
+        # 4. 시작일 / 종료일 확인
+        # ====================================================
+
+        if end < start:
+
+            return {
+                "success": False,
+                "message": (
+                    "종료일은 시작일보다 빠를 수 없습니다."
+                )
+            }
+
+
+        # ====================================================
+        # 5. 휴가 일수 계산
+        # ====================================================
+
+        leave_days = (
+            end - start
+        ).days + 1
+
+
+        # ====================================================
+        # 6. 휴가 잔액 조회
+        # ====================================================
+
+        cursor.execute(
+            """
+            SELECT
+                total_days,
+                used_days,
+                remaining_days
+            FROM leave_balance
+            WHERE employee_id = %s
+            FOR UPDATE
+            """,
+            (actor_id,)
+        )
+
+        balance = cursor.fetchone()
+
+        if not balance:
+
+            return {
+                "success": False,
+                "message": (
+                    "휴가 잔액 정보를 찾을 수 없습니다."
+                )
+            }
+
+        total_days = balance[0]
+        used_days = balance[1]
+        remaining_days = balance[2]
+
+
+        # ====================================================
+        # 7. 잔여 휴가 확인
+        # ====================================================
+
+        if remaining_days < leave_days:
+
+            return {
+                "success": False,
+                "message": (
+                    f"잔여 휴가가 부족합니다. "
+                    f"현재 잔여 휴가: {remaining_days}일, "
+                    f"신청 휴가: {leave_days}일"
+                )
+            }
+
+
+        # ====================================================
+        # 8. 동일 기간 중복 신청 확인
+        # ====================================================
+
+        cursor.execute(
+            """
+            SELECT
+                request_id,
+                start_date,
+                end_date,
+                status
+            FROM leave_request
+            WHERE employee_id = %s
+              AND status IN ('PENDING', 'APPROVED')
+              AND start_date <= %s
+              AND end_date >= %s
+            """,
+            (
+                actor_id,
+                end,
+                start
+            )
+        )
+
+        duplicate = cursor.fetchone()
+
+        if duplicate:
+
+            return {
+                "success": False,
+                "message": (
+                    f"기존 휴가 신청과 기간이 겹칩니다. "
+                    f"(신청번호: {duplicate[0]}, "
+                    f"{duplicate[1]} ~ {duplicate[2]})"
+                )
+            }
+
+
+        # ====================================================
+        # 9. 휴가 신청 INSERT
+        # ====================================================
+
+        cursor.execute(
+            """
+            INSERT INTO leave_request (
+                employee_id,
+                start_date,
+                end_date,
+                leave_days,
+                reason,
+                status
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                'PENDING'
+            )
+            RETURNING request_id
+            """,
+            (
+                actor_id,
+                start,
+                end,
+                leave_days,
+                reason
+            )
+        )
+
+        request_id = cursor.fetchone()[0]
+
+
+        # ====================================================
+        # 10. COMMIT
+        # ====================================================
+
+        conn.commit()
+
+
+        print(
+            f"[LEAVE REQUEST] "
+            f"request={request_id}, "
+            f"employee={actor_id}, "
+            f"name={actor_name}, "
+            f"start={start}, "
+            f"end={end}, "
+            f"days={leave_days}, "
+            f"reason={reason}"
+        )
+
+
+        # ====================================================
+        # 11. 결과 반환
+        # ====================================================
+
+        return {
+            "success": True,
+            "request_id": request_id,
+            "employee_id": actor_id,
+            "start_date": str(start),
+            "end_date": str(end),
+            "leave_days": leave_days,
+            "reason": reason,
+            "status": "PENDING",
+            "message": (
+                f"휴가 신청이 완료되었습니다. "
+                f"({start} ~ {end}, {leave_days}일)"
+            )
+        }
+
+
+    except Exception as e:
+
+        conn.rollback()
+
+        print("[REQUEST LEAVE ERROR]")
+        print(e)
+
+        return {
+            "success": False,
+            "message": (
+                "휴가 신청 중 오류가 발생했습니다."
+            )
+        }
+
+
+    finally:
+
+        if cursor:
+            cursor.close()
+
+        conn.close()
+
+@tool
+def get_leave_balance(
+    actor_employee_id: str
+):
+    """
+    로그인한 사용자의 휴가 잔액을 조회한다.
+    """
+
+    conn = get_db_connection()
+    cursor = None
+
+    try:
+
+        cursor = conn.cursor()
+
+        actor = get_actor(
+            cursor,
+            actor_employee_id
+        )
+
+        if not actor:
+
+            return {
+                "success": False,
+                "message": "로그인 사용자를 찾을 수 없습니다."
+            }
+
+        actor_id = actor[0]
+        actor_name = actor[1]
+
+        cursor.execute(
+            """
+            SELECT
+                total_days,
+                used_days,
+                remaining_days
+            FROM leave_balance
+            WHERE employee_id = %s
+            """,
+            (actor_id,)
+        )
+
+        balance = cursor.fetchone()
+
+        if not balance:
+
+            return {
+                "success": False,
+                "message": "휴가 잔액 정보를 찾을 수 없습니다."
+            }
+
+        return {
+            "success": True,
+            "employee_id": actor_id,
+            "name": actor_name,
+            "total_days": balance[0],
+            "used_days": balance[1],
+            "remaining_days": balance[2]
+        }
+
+    except Exception as e:
+
+        print("[GET LEAVE BALANCE ERROR]")
+        print(e)
+
+        return {
+            "success": False,
+            "message": "휴가 잔액 조회 중 오류가 발생했습니다."
+        }
+
+    finally:
+
+        if cursor:
+            cursor.close()
+
+        conn.close()
+
+@tool
+def find_employee(name: str):
+    """
+    직원 이름으로 직원 정보를 조회한다.
+    동명이인이 있는 경우 여러 직원의 정보를 반환한다.
+    """
+    conn = get_db_connection()
+
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                employee_id,
+                name,
+                department,
+                position
+            FROM employee
+            WHERE name = %s
+            """,
+            (name,)
+        )
+
+        rows = cursor.fetchall()
+
+        return [
+            {
+                "employee_id": row[0],
+                "name": row[1],
+                "department": row[2],
+                "position": row[3]
+            }
+            for row in rows
+        ]
+
+    finally:
+        cursor.close()
         conn.close()

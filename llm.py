@@ -1,68 +1,38 @@
-from llama_cpp import Llama
-from langchain_core.language_models.llms import LLM
-from typing import Optional, List
+import os
 
 
-MODEL_PATH = r"D:\models\llm-models\EXAONE-3.5-7.8B-Instruct-Q6_K.gguf"
+from dotenv import load_dotenv
 
+load_dotenv(".env.local")
 
-# ============================================================
-# EXAONE 모델 로드
-# ============================================================
+from langchain_ollama import ChatOllama
 
-llm = Llama(
-    model_path=MODEL_PATH,
+LLM_OLLAMA_BASE_URL = os.getenv(
+    "LLM_OLLAMA_BASE_URL",
+    "http://ollama-inference-service.ai-service.svc.cluster.local:11434"
+)
 
-    # GPU 사용
-    n_gpu_layers=-1,
+MODEL_NAME = os.getenv(
+    "MODEL_NAME",
+    "exaone3.5:7.8b"
+)
 
-    # Context
-    n_ctx=4096,
-
-    # CPU threads
-    n_threads=8,
-
-    verbose=False,
+TEMPERATURE = float(
+    os.getenv("TEMPERATURE", "0.3")
 )
 
 
-# ============================================================
-# LangChain Wrapper
-# ============================================================
-
-class EXAONELLM(LLM):
-
-    @property
-    def _llm_type(self) -> str:
-        return "exaone-gguf"
-
-    @property
-    def _identifying_params(self):
-        return {
-            "model": MODEL_PATH
-        }
-
-    def _call(
-        self,
-        prompt: str,
-        stop: Optional[List[str]] = None,
-        run_manager=None,
-        **kwargs
-    ) -> str:
-
-        result = llm.create_chat_completion(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            max_tokens=512,
-            temperature=0.3,
-            stop=stop,
-        )
-
-        return result["choices"][0]["message"]["content"]
+print("=== LLM CONFIG ===")
+print("BASE_URL =", LLM_OLLAMA_BASE_URL)
+print("MODEL =", MODEL_NAME)
 
 
-answer_llm = EXAONELLM()
+
+answer_llm = ChatOllama(
+    base_url=LLM_OLLAMA_BASE_URL,
+    model=MODEL_NAME,
+    temperature=TEMPERATURE,
+    streaming=False,
+    num_ctx=8192
+)
+
