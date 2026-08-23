@@ -124,6 +124,17 @@ def get_leave_requests(
         actor_department = actor[2]
         role_id = actor[3]
 
+        # 관리자(3)는 휴가 조회 시 항상 전체 직원 기준
+        if role_id == 3 and not employee_id:
+            scope = "all"
+
+            print(
+                f"[ADMIN SCOPE OVERRIDE] "
+                f"actor={actor_id}, "
+                f"scope={scope}, "
+                f"status={status}"
+            )
+
         print(
             f"[LEAVE ACCESS] "
             f"employee={actor_id}, "

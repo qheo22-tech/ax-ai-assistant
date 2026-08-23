@@ -164,6 +164,68 @@ def handle_leave(
 
         ).model_dump()
 
+    # ========================================================
+    # 승인 / 거절 request_id 안전 검증
+    # ========================================================
+
+    if (
+        action.action in ("approve", "reject")
+        and request_id is None
+    ):
+        # 현재 질문에 사용자가 직접 번호를 말했는지 확인
+        # "23번 승인", "23 승인" 둘 다 허용
+        explicit_request_id = re.search(
+            r"\b(\d+)(?:\s*번)?\b",
+            question
+        )
+
+        if not explicit_request_id:
+
+            # LLM이 과거 대화에서 임의로 추론한 번호는 제거
+            if action.request_id is not None:
+
+                print(
+                    f"[REQUEST ID OVERRIDE] "
+                    f"question={question!r}, "
+                    f"llm_request_id={action.request_id} "
+                    f"-> None"
+                )
+
+            action.request_id = None
+
+        else:
+
+            action.request_id = int(
+                explicit_request_id.group(1)
+            )
+
+        # ========================================================
+    # 조회 상태 보정
+    # ========================================================
+
+    if action.action == "query":
+
+        normalized_question = question.replace(" ", "")
+
+        # 신청 목록 = 승인 대기(PENDING) 목록
+        if (
+            "신청목록" in normalized_question
+            or "신청휴가" in normalized_question
+            or "휴가신청목록" in normalized_question
+        ):
+            action.status = "PENDING"
+
+        # 승인 목록
+        elif "승인" in normalized_question:
+            action.status = "APPROVED"
+
+        # 거절 / 반려 목록
+        elif (
+            "거절" in normalized_question
+            or "반려" in normalized_question
+        ):
+            action.status = "REJECTED"
+
 
     print("[LEAVE ACTION]")
     print(action.model_dump())
@@ -409,26 +471,24 @@ def handle_leave(
         )
 
 
-        if action.employee_id:
+        # 관리자 계정은 전체 조회 기준으로 표시
+        if actor_employee_id == "E016":
+            title_prefix = "전체"
 
+        elif action.employee_id:
             title_prefix = action.employee_id
 
         elif action.scope == "self":
-
             title_prefix = "내"
 
         elif action.scope == "team":
-
             title_prefix = "팀원"
 
         elif action.scope == "all":
-
             title_prefix = "전체"
 
         else:
-
             title_prefix = "내"
-
 
         if action.status == "PENDING":
 
