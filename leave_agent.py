@@ -207,28 +207,20 @@ def handle_leave(
 
         normalized_question = question.replace(" ", "")
 
-        # 신청 목록 = 승인 대기(PENDING) 목록
-        if (
-            "신청목록" in normalized_question
-            or "신청휴가" in normalized_question
-            or "휴가신청목록" in normalized_question
-        ):
-            action.status = "PENDING"
-
-        # 승인 목록
-        elif "승인" in normalized_question:
+        if "승인된" in normalized_question:
             action.status = "APPROVED"
 
-        # 거절 / 반려 목록
         elif (
             "거절" in normalized_question
             or "반려" in normalized_question
         ):
             action.status = "REJECTED"
 
+        elif "대기" in normalized_question:
 
-    print("[LEAVE ACTION]")
-    print(action.model_dump())
+
+            print("[LEAVE ACTION]")
+            print(action.model_dump())
 
 
     # ========================================================
