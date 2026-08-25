@@ -36,18 +36,6 @@ answer_chain = answer_prompt | answer_llm
 # Conversation Memory
 # ============================================================
 
-# 사용자별 ConversationMemory
-#
-# employee_id
-#     ↓
-# ConversationMemory
-#
-# E001 → Memory
-# E002 → Memory
-# E003 → Memory
-#
-# 사용자별로 대화가 섞이지 않도록 분리한다.
-
 conversation_memories = {}
 
 
@@ -70,8 +58,6 @@ def get_current_user(request: gr.Request):
 
     try:
 
-        # FastAPI / Starlette SessionMiddleware가
-        # 저장한 session 접근
         session = request.request.session
 
         employee_id = session.get("employee_id")
@@ -136,13 +122,8 @@ def respond(
         message
     )
 
-
-    # 현재 질문까지 포함된 전체 memory
     messages = memory.get_messages()
 
-
-    # 현재 질문은 question 인자로 별도 전달되므로
-    # history에는 이전 대화만 전달한다.
     previous_messages = messages[:-1]
 
 
@@ -159,8 +140,6 @@ def respond(
 
     last_result = memory.get_last_result()
 
-
-    # 승인 / 거절 후속 선택 입력용
     followup_request_id = None
     previous_action = None
 
@@ -199,8 +178,6 @@ def respond(
 
     else:
 
-        # 현재 질문은 message로 전달하고
-        # 이전 대화만 previous_messages로 전달한다.
         route = route_question(
             message,
             previous_messages
@@ -213,7 +190,26 @@ def respond(
 
 
     # --------------------------------------------------------
-    # 5. Leave Agent
+    # 5. LLM 서버 연결 실패
+    #
+    # Router가 LLM 호출 자체에 실패한 경우
+    # unknown과 구분한다.
+    # --------------------------------------------------------
+
+    if route == "llm_unavailable":
+
+        response = (
+            "현재 AI 서버가 종료되어 있습니다.\n\n"
+            "평일 18:00 이후 및 주말에는 GPU 서버를 종료합니다."
+        )
+
+        memory.add_assistant(response)
+
+        return response
+
+
+    # --------------------------------------------------------
+    # 6. Leave Agent
     # --------------------------------------------------------
 
     if route == "leave":
@@ -267,12 +263,7 @@ def respond(
 
 
         # ----------------------------------------------------
-        # 중요:
-        # 휴가 Agent 응답도 대화 Memory에 저장한다.
-        #
-        # 그래야 다음 질문에서
-        # "그중", "그거", "승인된 것만"
-        # 같은 문맥을 사용할 수 있다.
+        # Leave 응답 Memory 저장
         # ----------------------------------------------------
 
         memory.add_assistant(
@@ -290,7 +281,10 @@ def respond(
 
 
     # --------------------------------------------------------
-    # 6. Unknown
+    # 7. Unknown
+    #
+    # LLM은 정상적으로 응답했지만
+    # leave / general로 판단하지 못한 경우
     # --------------------------------------------------------
 
     if route == "unknown":
@@ -311,12 +305,32 @@ def respond(
 
 
     # --------------------------------------------------------
-    # 7. General
+    # 8. General
     # --------------------------------------------------------
 
-    response = answer_chain.invoke({
-        "question": message
-    })
+    try:
+
+        response = answer_chain.invoke({
+            "question": message
+        })
+
+    except Exception as e:
+
+        print("[GENERAL LLM ERROR]")
+        print(e)
+
+        response = (
+            "AI 서버에 연결할 수 없습니다. "
+            "현재 AI 서버가 실행되지 않았거나 "
+            "연결할 수 없는 상태입니다. "
+            "잠시 후 다시 시도해주세요."
+        )
+
+        memory.add_assistant(
+            response
+        )
+
+        return response
 
 
     # --------------------------------------------------------
@@ -364,9 +378,6 @@ def get_status_display(status):
     return f"{status} ({label})"
 
 
-
-
-
 # ============================================================
 # Leave Response → Gradio 출력
 # ============================================================
@@ -380,7 +391,6 @@ def format_leave_response(response):
     if response.get("type") == "leave_list":
 
         lines = []
-
 
         lines.append(
             f"### {response['title']} "
@@ -437,16 +447,9 @@ def format_leave_response(response):
 
     if response.get("type") == "leave_action":
 
-        # ----------------------------------------------------
-        # 승인/거절 대상 선택처럼
-        # items가 같이 넘어오는 경우
-        # 목록도 함께 출력한다.
-        # ----------------------------------------------------
-
         if response.get("items"):
 
             lines = []
-
 
             lines.append(
                 response.get(
@@ -490,7 +493,6 @@ def format_leave_response(response):
             return "\n".join(lines)
 
 
-        # 일반 leave_action 응답
         return response.get(
             "message",
             "휴가 업무가 처리되었습니다."
