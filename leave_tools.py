@@ -69,10 +69,13 @@ def get_leave_requests(
 
     actor_employee_id: str = None,
 
-    scope: Optional[Literal["self", "team", "all","employee"]] = "self"
+    scope: Optional[
+        Literal["self", "team", "all", "employee"]
+    ] = "self"
 ):
     """
-    로그인한 사용자의 권한에 따라 휴가 신청 데이터를 조회한다.
+    로그인한 사용자의 권한과 조회 범위(scope)에 따라
+    휴가 신청 데이터를 조회한다.
 
     권한:
 
@@ -80,11 +83,29 @@ def get_leave_requests(
         - 자신의 휴가만 조회 가능
 
     MANAGER(2)
+        - 자신의 휴가 조회 가능
         - 자신의 팀(department) 휴가 조회 가능
 
     ADMIN(3)
-        - 전체 직원의 휴가 조회 가능
+        - 자신의 휴가 조회 가능
+        - 자신의 팀(department) 휴가 조회 가능
+        - 전체 직원 휴가 조회 가능
 
+    scope:
+
+    self
+        - 본인 휴가
+
+    team
+        - 자신의 부서 휴가
+
+    all
+        - 전체 직원 휴가
+        - ADMIN만 가능
+
+    employee
+        - 특정 직원 휴가
+        - employee_id가 지정되어야 함
 
     status:
         PENDING  = 승인 대기
@@ -131,25 +152,15 @@ def get_leave_requests(
         actor_department = actor[2]
         role_id = actor[3]
 
-        # 관리자(3)는 휴가 조회 시 항상 전체 직원 기준
-        if role_id == 3 and not employee_id:
-            scope = "all"
-
-            print(
-                f"[ADMIN SCOPE OVERRIDE] "
-                f"actor={actor_id}, "
-                f"scope={scope}, "
-                f"status={status}"
-            )
-
         print(
             f"[LEAVE ACCESS] "
             f"employee={actor_id}, "
             f"name={actor_name}, "
             f"department={actor_department}, "
-            f"role={role_id}"
+            f"role={role_id}, "
+            f"scope={scope}, "
+            f"target_employee={employee_id}"
         )
-
 
         # ====================================================
         # 2. 기본 SQL
@@ -170,30 +181,23 @@ def get_leave_requests(
                 lr.created_at
             FROM leave_request lr
             JOIN employee e
-            ON lr.employee_id = e.employee_id
+              ON lr.employee_id = e.employee_id
             WHERE 1 = 1
         """
 
         params = []
 
-
         # ====================================================
-        # 3. 권한 + 조회 대상 결정
+        # 3. 조회 범위 결정
         # ====================================================
 
-        # 특정 직원 ID가 지정된 경우
-        # employee_id를 최우선으로 처리한다.
-        #
-        # scope=self 라도
-        # "E002 휴가 보여줘"처럼 특정 직원이 지정되었다면
-        # 본인(actor_id) 조건을 먼저 넣으면 안 된다.
+        # ----------------------------------------------------
+        # 특정 직원이 지정된 경우
+        # ----------------------------------------------------
 
         if employee_id:
 
-            # ------------------------------------------------
             # USER
-            # ------------------------------------------------
-
             if role_id == 1:
 
                 if employee_id != actor_id:
@@ -202,11 +206,7 @@ def get_leave_requests(
                         "error": "본인의 휴가만 조회할 수 있습니다."
                     }
 
-
-            # ------------------------------------------------
             # MANAGER
-            # ------------------------------------------------
-
             elif role_id == 2:
 
                 cursor.execute(
@@ -234,16 +234,11 @@ def get_leave_requests(
                         "error": "자신의 팀원 휴가만 조회할 수 있습니다."
                     }
 
-
-            # ------------------------------------------------
             # ADMIN
-            # ------------------------------------------------
-
             elif role_id == 3:
 
                 # ADMIN은 모든 직원 조회 가능
                 pass
-
 
             else:
 
@@ -251,41 +246,46 @@ def get_leave_requests(
                     "error": "유효하지 않은 사용자 권한입니다."
                 }
 
-
-            # ------------------------------------------------
             # 특정 직원 조건
-            # ------------------------------------------------
-
             query += """
                 AND lr.employee_id = %s
             """
 
             params.append(employee_id)
 
-
-        # ====================================================
-        # 4. 특정 직원이 지정되지 않은 경우
-        # ====================================================
+        # ----------------------------------------------------
+        # 특정 직원이 지정되지 않은 경우
+        # ----------------------------------------------------
 
         else:
 
-            # ------------------------------------------------
+            # =================================================
             # USER
-            # ------------------------------------------------
+            # =================================================
 
             if role_id == 1:
 
-                # USER는 무조건 본인
-                query += """
-                    AND lr.employee_id = %s
-                """
+                # USER는 본인 휴가만 조회 가능
+                if scope == "self":
+                    query += """
+                        AND lr.employee_id = %s
+                    """
 
-                params.append(actor_id)
+                    params.append(actor_id)
 
+                elif scope in ["team", "all"]:
+                    return {
+                        "error": "팀원 또는 전체 직원의 휴가를 조회할 권한이 없습니다."
+                    }
 
-            # ------------------------------------------------
+                else:
+                    return {
+                        "error": "휴가 조회 권한이 없습니다."
+                    }
+
+            # =================================================
             # MANAGER
-            # ------------------------------------------------
+            # =================================================
 
             elif role_id == 2:
 
@@ -298,16 +298,14 @@ def get_leave_requests(
 
                     params.append(actor_id)
 
-
                 elif scope == "team":
 
-                    # 팀 전체
+                    # 자신의 부서
                     query += """
                         AND e.department = %s
                     """
 
                     params.append(actor_department)
-
 
                 elif scope == "all":
 
@@ -315,20 +313,18 @@ def get_leave_requests(
                         "error": "전체 휴가를 조회할 권한이 없습니다."
                     }
 
-
                 else:
 
-                    # scope가 이상하면 기본적으로 본인
+                    # 알 수 없는 scope
                     query += """
                         AND lr.employee_id = %s
                     """
 
                     params.append(actor_id)
 
-
-            # ------------------------------------------------
+            # =================================================
             # ADMIN
-            # ------------------------------------------------
+            # =================================================
 
             elif role_id == 3:
 
@@ -341,22 +337,28 @@ def get_leave_requests(
 
                     params.append(actor_id)
 
+                elif scope == "team":
 
-                elif scope in ["team", "all"]:
+                    # 자신의 부서
+                    query += """
+                        AND e.department = %s
+                    """
 
-                    # ADMIN은 전체 조회 가능
+                    params.append(actor_department)
+
+                elif scope == "all":
+
+                    # 전체 직원
                     pass
-
 
                 else:
 
-                    # 기본은 본인
+                    # 알 수 없는 scope
                     query += """
                         AND lr.employee_id = %s
                     """
 
                     params.append(actor_id)
-
 
             else:
 
@@ -364,79 +366,8 @@ def get_leave_requests(
                     "error": "유효하지 않은 사용자 권한입니다."
                 }
 
-# ====================================================
-# 4. 특정 직원 조회
-# ====================================================
-
-        if employee_id:
-
-            # ------------------------------------------------
-            # USER
-            # ------------------------------------------------
-
-            if role_id == 1:
-
-                if employee_id != actor_id:
-
-                    return {
-                        "error": "본인의 휴가만 조회할 수 있습니다."
-                    }
-
-
-            # ------------------------------------------------
-            # MANAGER
-            # ------------------------------------------------
-
-            elif role_id == 2:
-
-                cursor.execute(
-                    """
-                    SELECT department
-                    FROM employee
-                    WHERE employee_id = %s
-                    """,
-                    (employee_id,)
-                )
-
-                target = cursor.fetchone()
-
-                if not target:
-
-                    return {
-                        "error": "조회하려는 직원을 찾을 수 없습니다."
-                    }
-
-                target_department = target[0]
-
-                if target_department != actor_department:
-
-                    return {
-                        "error": "자신의 팀원 휴가만 조회할 수 있습니다."
-                    }
-
-
-            # ------------------------------------------------
-            # ADMIN
-            # ------------------------------------------------
-
-            elif role_id == 3:
-
-                pass
-
-
-            # ------------------------------------------------
-            # 최종 직원 조건
-            # ------------------------------------------------
-
-            query += """
-                AND lr.employee_id = %s
-            """
-
-            params.append(employee_id)
-
-
         # ====================================================
-        # 5. 상태 조건
+        # 4. 상태 조건
         # ====================================================
 
         if status:
@@ -447,9 +378,8 @@ def get_leave_requests(
 
             params.append(status)
 
-
         # ====================================================
-        # 6. 시작 날짜 조건
+        # 5. 시작 날짜 조건
         # ====================================================
 
         if start_date:
@@ -460,9 +390,8 @@ def get_leave_requests(
 
             params.append(start_date)
 
-
         # ====================================================
-        # 7. 종료 날짜 조건
+        # 6. 종료 날짜 조건
         # ====================================================
 
         if end_date:
@@ -473,15 +402,17 @@ def get_leave_requests(
 
             params.append(end_date)
 
-
         # ====================================================
-        # 8. 정렬
+        # 7. 정렬
         # ====================================================
 
         query += """
             ORDER BY lr.start_date DESC
         """
 
+        # ====================================================
+        # 8. SQL 로그
+        # ====================================================
 
         print("[LEAVE SQL]")
         print(query)
@@ -489,9 +420,8 @@ def get_leave_requests(
         print("[LEAVE PARAMS]")
         print(params)
 
-
         # ====================================================
-        # 9. 실행
+        # 9. SQL 실행
         # ====================================================
 
         cursor.execute(
@@ -500,7 +430,6 @@ def get_leave_requests(
         )
 
         rows = cursor.fetchall()
-
 
         # ====================================================
         # 10. 결과 변환
@@ -524,9 +453,13 @@ def get_leave_requests(
                 "created_at": str(row[10])
             })
 
+        print(
+            f"[LEAVE RESULT] "
+            f"scope={scope}, "
+            f"count={len(result)}"
+        )
 
         return result
-
 
     except Exception as e:
 
@@ -536,7 +469,6 @@ def get_leave_requests(
         return {
             "error": "휴가 데이터를 조회하는 중 오류가 발생했습니다."
         }
-
 
     finally:
 

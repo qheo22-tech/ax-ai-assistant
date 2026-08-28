@@ -480,19 +480,195 @@ def handle_leave(
     # 휴가 조회
     # ========================================================
 
+        # ========================================================
+    # STEP 5
+    # 휴가 조회
+    # ========================================================
+
     if action.action == "query":
 
+        # ====================================================
+        # 조회 대상 직원 사번 결정
+        #
+        # LLM이
+        #
+        # employee_name = "김철수"
+        # employee_id   = None
+        #
+        # 으로 반환할 수 있으므로 여기서 직원명을
+        # 실제 employee_id로 변환한다.
+        # ====================================================
+
         employee_id = action.employee_id
+
+        # 이름으로 조회한 경우
+        if (
+            action.employee_name
+            and not employee_id
+        ):
+
+            employees = find_employee.invoke({
+                "name": action.employee_name
+            })
+
+            print("[LEAVE TARGET EMPLOYEE SEARCH]")
+            print(employees)
+
+            # 직원 없음
+            if not employees:
+
+                return LeaveResponse(
+
+                    type="leave_action",
+
+                    action="query",
+
+                    title="직원 조회",
+
+                    count=0,
+
+                    items=[],
+
+                    success=False,
+
+                    message=(
+                        f"{action.employee_name} "
+                        "직원을 찾을 수 없습니다."
+                    )
+
+                ).model_dump()
+
+            # 동명이인
+            if len(employees) > 1:
+
+                employee_list = ", ".join(
+
+                    f"{e['name']} "
+                    f"({e['employee_id']}, "
+                    f"{e.get('department', '')})"
+
+                    for e in employees
+
+                )
+
+                return LeaveResponse(
+
+                    type="leave_action",
+
+                    action="query",
+
+                    title="직원 선택",
+
+                    count=len(employees),
+
+                    items=[],
+
+                    success=False,
+
+                    message=(
+                        f"{action.employee_name} 직원이 "
+                        f"{len(employees)}명 있습니다.\n"
+                        f"{employee_list}\n"
+                        "사번 또는 부서를 지정해주세요."
+                    )
+
+                ).model_dump()
+
+            # 이름이 유일하면 사번 확정
+            employee_id = employees[0]["employee_id"]
+
+            print(
+                f"[LEAVE TARGET RESOLVED] "
+                f"{action.employee_name} "
+                f"-> {employee_id}"
+            )
+
+
+        # ====================================================
+        # 조회 대상 결정
+        # ====================================================
+        #
+        # self
+        #   → actor 본인
+        #
+        # team
+        #   → actor의 팀원
+        #
+        # all
+        #   → 전체
+        #
+        # employee
+        #   → 특정 직원
+        #
+        # employee_name으로 특정 직원이 지정된 경우에는
+        # 위에서 employee_id가 확정되어 있다.
+        # ====================================================
+
+        if action.scope == "self":
+
+            employee_id = None
+
+        elif action.scope == "employee":
+
+            # 특정 직원 조회인데 employee_id가 없으면
+            # 안전하게 본인 조회로 떨어뜨리지 않고 오류 처리
+
+            if not employee_id:
+
+                return LeaveResponse(
+
+                    type="leave_action",
+
+                    action="query",
+
+                    title="휴가 조회",
+
+                    count=0,
+
+                    items=[],
+
+                    success=False,
+
+                    message=(
+                        "조회할 직원의 정보를 "
+                        "확인할 수 없습니다."
+                    )
+
+                ).model_dump()
+
+        elif action.scope in ("team", "all"):
+
+            # team / all은 employee_id를 사용하지 않는다.
+            employee_id = None
+
+        else:
+
+            # 알 수 없는 scope
+            action.scope = "self"
+            employee_id = None
+
 
         print("[LEAVE QUERY]")
 
         print(
             f"scope={action.scope}, "
             f"employee_id={employee_id}, "
+            f"employee_name={action.employee_name}, "
             f"status={action.status}, "
             f"actor={actor_employee_id}"
         )
 
+
+        # ====================================================
+        # 실제 휴가 조회
+        #
+        # 중요:
+        # role=2 팀장
+        # role=3 전체관리자
+        #
+        # 권한 검사는 get_leave_requests 내부에서
+        # actor_employee_id를 기준으로 수행해야 한다.
+        # ====================================================
 
         result = get_leave_requests.invoke({
 
@@ -520,6 +696,10 @@ def handle_leave(
         print("[LEAVE TOOL RESULT]")
         print(result)
 
+
+        # ====================================================
+        # Tool 에러
+        # ====================================================
 
         if (
             isinstance(result, dict)
@@ -554,17 +734,24 @@ def handle_leave(
         # 제목
         # ====================================================
 
-        if actor_employee_id == "E016":
-
-            title_prefix = "전체"
-
-        elif action.employee_id:
-
-            title_prefix = action.employee_id
-
-        elif action.scope == "self":
+        if action.scope == "self":
 
             title_prefix = "내"
+
+        elif action.scope == "employee":
+
+            # 특정 직원
+            if action.employee_name:
+
+                title_prefix = action.employee_name
+
+            elif employee_id:
+
+                title_prefix = employee_id
+
+            else:
+
+                title_prefix = "직원"
 
         elif action.scope == "team":
 
@@ -578,6 +765,10 @@ def handle_leave(
 
             title_prefix = "내"
 
+
+        # ====================================================
+        # 상태별 제목
+        # ====================================================
 
         if action.status == "PENDING":
 
@@ -636,12 +827,6 @@ def handle_leave(
         # ====================================================
         # STEP 5-1
         # Query + Excel 동시 요청
-        #
-        # 사용자가:
-        #
-        # "전체 휴가 목록 보여주고 엑셀로 다운로드해줘"
-        #
-        # 라고 했을 때 여기로 들어온다.
         # ====================================================
 
         if excel_action:
@@ -654,7 +839,6 @@ def handle_leave(
 
             try:
 
-                # LeaveItem → dict
                 excel_items = [
                     item.model_dump()
                     for item in items
@@ -664,8 +848,12 @@ def handle_leave(
                 print("[LEAVE EXCEL ITEMS]")
                 print(excel_items)
 
+
                 excel_result = create_leave_excel.invoke({
-                    "leave_data": excel_items
+
+                    "leave_data":
+                        excel_items
+
                 })
 
 
@@ -765,9 +953,6 @@ def handle_leave(
 
                 print(e)
 
-
-                # 조회는 성공했지만
-                # Excel 생성만 실패
 
                 return {
 

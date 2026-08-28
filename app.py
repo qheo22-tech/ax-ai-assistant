@@ -180,6 +180,7 @@ def respond(
 
         route = route_question(
             message,
+                previous_messages,
         )
 
 

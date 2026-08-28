@@ -44,5 +44,6 @@ answer_llm = ChatOllama(
     streaming=False,
     num_ctx=4096,
     think=False,
+    num_predict=128,
     keep_alive=-1,
 )

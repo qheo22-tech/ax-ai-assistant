@@ -7,3 +7,4 @@ __pycache__/
 models/
 .vscode/
 app copy.py
+generated_files/
