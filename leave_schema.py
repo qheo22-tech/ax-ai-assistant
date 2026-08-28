@@ -109,6 +109,10 @@ class LeaveResponse(BaseModel):
 
     message: Optional[str] = None
 
+    # === 여기 추가 ===
+    file_path: Optional[str] = None
+    filename: Optional[str] = None
+
 
 class LeavePlan(BaseModel):
     actions: list[LeaveAction]

@@ -10,6 +10,9 @@ load_dotenv(".env.local2")
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pathlib import Path
+from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 
 from starlette.middleware.sessions import SessionMiddleware
 

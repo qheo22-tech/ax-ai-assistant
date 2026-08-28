@@ -1,5 +1,6 @@
 import json
 import re
+import os
 
 from leave_prompts import leave_action_chain
 
@@ -907,7 +908,8 @@ def handle_leave(
                         "file_path":
                             excel_result.get(
                                 "file_path"
-                            )
+                            ),
+                        "filename": excel_result["filename"],   # <-- 이 줄 추가
 
                     }
 
@@ -1701,10 +1703,10 @@ def handle_leave(
 
             excel_result = create_leave_excel.invoke({
 
-                "items":
-                    excel_items
+                    "leave_data":
+                        excel_items
 
-            })
+                })
 
 
             print(
@@ -1753,7 +1755,9 @@ def handle_leave(
                     "file_path":
                         excel_result.get(
                             "file_path"
-                        )
+                        ),
+                    "filename": excel_result.get("filename"),   # <-- 추가
+                
 
                 }
 
@@ -1782,7 +1786,9 @@ def handle_leave(
                     "엑셀 파일이 생성되었습니다.",
 
                 "file_path":
-                    excel_result
+                    excel_result,
+                "filename": os.path.basename(excel_result),   # <-- 추가
+
 
             }
 
