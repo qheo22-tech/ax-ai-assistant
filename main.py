@@ -44,6 +44,23 @@ templates = Jinja2Templates(
 )
 
 
+@app.get("/download/{filename}")
+def download_file(filename: str):
+
+    file_path = Path("generated_files") / filename
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="파일을 찾을 수 없습니다."
+        )
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    
 # ============================================================
 # DB 연결
 # ============================================================

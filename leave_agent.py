@@ -3,14 +3,14 @@ import re
 
 from leave_prompts import leave_action_chain
 
-
 from leave_tools import (
     get_leave_requests,
     get_leave_balance,
     request_leave,
     approve_leave,
     reject_leave,
-    find_employee
+    find_employee,
+    create_leave_excel
 )
 
 from leave_schema import (
@@ -24,17 +24,8 @@ from leave_validator import validate_action
 from leave_formatter import convert_leave_items
 
 
-
 # ============================================================
-# 1. Leave Action 분석 Prompt
-# ============================================================
-
-
-
-
-
-# ============================================================
-# 5. Leave Agent
+# Leave Agent
 # ============================================================
 
 def handle_leave(
@@ -43,16 +34,19 @@ def handle_leave(
     request_id: int = None,
     previous_action: str = None,
     messages=None,
+    last_result=None,
 ):
-# ========================================================
-# STEP 1
-# 자연어 → JSON
-# ========================================================
+
+    # ========================================================
+    # STEP 1
+    # 자연어 → JSON
+    # ========================================================
 
     if request_id is not None:
 
         # 이전 승인/거절 요청에 대한
         # 신청번호 선택이므로 LLM을 호출하지 않는다.
+
         action_data = {
             "action": previous_action,
             "scope": "employee",
@@ -69,30 +63,52 @@ def handle_leave(
         print(action_data)
 
     else:
+
+        # ====================================================
+        # 최근 대화
+        # ====================================================
+
         history = ""
 
         if messages:
+
             history = "\n".join(
                 f"{message['role']}: {message['content']}"
                 for message in messages
             )
 
-        raw_result = leave_action_chain.invoke({
-            "question": question,
-            "history": history
-        })
+        # ====================================================
+        # 이전 업무 결과
+        # ====================================================
+
+        previous_result = ""
+
+        if last_result:
+
+            previous_result = json.dumps(
+                last_result,
+                ensure_ascii=False
+            )
 
         print("[LEAVE HISTORY]")
         print(history)
 
+        print("[LEAVE PREVIOUS RESULT]")
+        print(previous_result)
+
+        raw_result = leave_action_chain.invoke({
+            "question": question,
+            "history": history,
+            "previous_result": previous_result
+        })
+
         print("[LEAVE ACTION RAW]")
         print(repr(raw_result))
 
-
-        # ========================================================
+        # ====================================================
         # STEP 2
         # JSON 파싱
-        # ========================================================
+        # ====================================================
 
         try:
 
@@ -134,9 +150,66 @@ def handle_leave(
 
     try:
 
-        action = validate_action(
+        plan = validate_action(
             action_data
         )
+
+        print("[LEAVE PLAN]")
+        print(plan.model_dump())
+
+        print("[LEAVE ACTION COUNT]")
+        print(len(plan.actions))
+
+        for i, action_item in enumerate(plan.actions):
+
+            print(
+                f"[LEAVE ACTION {i}]"
+            )
+
+            print(
+                action_item.model_dump()
+            )
+
+        # ====================================================
+        # 첫 번째 Action
+        # ====================================================
+
+        action = plan.actions[0]
+
+        # ====================================================
+        # Excel Action이 있는지 확인
+        #
+        # 예:
+        #
+        # actions:
+        #   0 -> query
+        #   1 -> excel
+        #
+        # ====================================================
+
+        excel_action = next(
+            (
+                action_item
+                for action_item in plan.actions
+                if action_item.action == "excel"
+            ),
+            None
+        )
+
+        print("[LEAVE MAIN ACTION]")
+        print(action.model_dump())
+
+        print("[LEAVE EXCEL ACTION]")
+
+        if excel_action:
+
+            print(
+                excel_action.model_dump()
+            )
+
+        else:
+
+            print(None)
 
     except Exception as e:
 
@@ -164,6 +237,7 @@ def handle_leave(
 
         ).model_dump()
 
+
     # ========================================================
     # 승인 / 거절 request_id 안전 검증
     # ========================================================
@@ -172,8 +246,14 @@ def handle_leave(
         action.action in ("approve", "reject")
         and request_id is None
     ):
+
         # 현재 질문에 사용자가 직접 번호를 말했는지 확인
-        # "23번 승인", "23 승인" 둘 다 허용
+        #
+        # "23번 승인"
+        # "23 승인"
+        #
+        # 둘 다 허용
+
         explicit_request_id = re.search(
             r"\b(\d+)(?:\s*번)?\b",
             question
@@ -182,6 +262,7 @@ def handle_leave(
         if not explicit_request_id:
 
             # LLM이 과거 대화에서 임의로 추론한 번호는 제거
+
             if action.request_id is not None:
 
                 print(
@@ -199,28 +280,35 @@ def handle_leave(
                 explicit_request_id.group(1)
             )
 
-        # ========================================================
+
+    # ========================================================
     # 조회 상태 보정
     # ========================================================
 
     if action.action == "query":
 
-        normalized_question = question.replace(" ", "")
+        normalized_question = question.replace(
+            " ",
+            ""
+        )
 
         if "승인된" in normalized_question:
+
             action.status = "APPROVED"
 
         elif (
             "거절" in normalized_question
             or "반려" in normalized_question
         ):
+
             action.status = "REJECTED"
 
         elif "대기" in normalized_question:
 
+            action.status = "PENDING"
 
-            print("[LEAVE ACTION]")
-            print(action.model_dump())
+        print("[LEAVE ACTION]")
+        print(action.model_dump())
 
 
     # ========================================================
@@ -245,7 +333,6 @@ def handle_leave(
 
         print("[LEAVE BALANCE RESULT]")
         print(result)
-
 
         if not isinstance(result, dict):
 
@@ -463,24 +550,34 @@ def handle_leave(
         )
 
 
-        # 관리자 계정은 전체 조회 기준으로 표시
+        # ====================================================
+        # 제목
+        # ====================================================
+
         if actor_employee_id == "E016":
+
             title_prefix = "전체"
 
         elif action.employee_id:
+
             title_prefix = action.employee_id
 
         elif action.scope == "self":
+
             title_prefix = "내"
 
         elif action.scope == "team":
+
             title_prefix = "팀원"
 
         elif action.scope == "all":
+
             title_prefix = "전체"
 
         else:
+
             title_prefix = "내"
+
 
         if action.status == "PENDING":
 
@@ -511,6 +608,10 @@ def handle_leave(
             )
 
 
+        # ====================================================
+        # Query Response
+        # ====================================================
+
         response = LeaveResponse(
 
             type="leave_list",
@@ -530,6 +631,179 @@ def handle_leave(
 
         print("[LEAVE AGENT]")
         print(response.model_dump())
+
+
+        # ====================================================
+        # STEP 5-1
+        # Query + Excel 동시 요청
+        #
+        # 사용자가:
+        #
+        # "전체 휴가 목록 보여주고 엑셀로 다운로드해줘"
+        #
+        # 라고 했을 때 여기로 들어온다.
+        # ====================================================
+
+        if excel_action:
+
+            print("[LEAVE EXCEL]")
+            print(
+                "Query 결과를 Excel로 생성합니다."
+            )
+
+
+            try:
+
+                # LeaveItem → dict
+                excel_items = [
+                    item.model_dump()
+                    for item in items
+                ]
+
+
+                print("[LEAVE EXCEL ITEMS]")
+                print(excel_items)
+
+                excel_result = create_leave_excel.invoke({
+                    "leave_data": excel_items
+                })
+
+
+                print(
+                    "[LEAVE EXCEL RESULT]"
+                )
+
+                print(
+                    excel_result
+                )
+
+
+                # ====================================================
+                # Excel 결과가 dict인 경우
+                # ====================================================
+
+                if isinstance(
+                    excel_result,
+                    dict
+                ):
+
+                    return {
+
+                        "type":
+                            "leave_list",
+
+                        "action":
+                            "excel",
+
+                        "title":
+                            title,
+
+                        "count":
+                            len(items),
+
+                        "items":
+                            excel_items,
+
+                        "success":
+                            excel_result.get(
+                                "success",
+                                True
+                            ),
+
+                        "message":
+                            excel_result.get(
+                                "message",
+                                "엑셀 파일이 생성되었습니다."
+                            ),
+
+                        "file_path":
+                            excel_result.get(
+                                "file_path"
+                            )
+
+                    }
+
+
+                # ====================================================
+                # Excel 결과가 단순 파일 경로인 경우
+                # ====================================================
+
+                return {
+
+                    "type":
+                        "leave_list",
+
+                    "action":
+                        "excel",
+
+                    "title":
+                        title,
+
+                    "count":
+                        len(items),
+
+                    "items":
+                        excel_items,
+
+                    "success":
+                        True,
+
+                    "message":
+                        "엑셀 파일이 생성되었습니다.",
+
+                    "file_path":
+                        excel_result
+
+                }
+
+
+            except Exception as e:
+
+                print(
+                    "[LEAVE EXCEL ERROR]"
+                )
+
+                print(e)
+
+
+                # 조회는 성공했지만
+                # Excel 생성만 실패
+
+                return {
+
+                    "type":
+                        "leave_list",
+
+                    "action":
+                        "query",
+
+                    "title":
+                        title,
+
+                    "count":
+                        len(items),
+
+                    "items":
+                        [
+                            item.model_dump()
+                            for item in items
+                        ],
+
+                    "success":
+                        False,
+
+                    "message":
+                        (
+                            "휴가 목록은 조회했지만 "
+                            "엑셀 파일 생성에 실패했습니다."
+                        )
+
+                }
+
+
+        # ====================================================
+        # Excel 요청이 없는 일반 Query
+        # ====================================================
 
         return response.model_dump()
 
@@ -587,13 +861,8 @@ def handle_leave(
                 "진행하지 않습니다."
             )
 
-            print(
-                "[LEAVE AGENT]"
-            )
-
-            print(
-                response.model_dump()
-            )
+            print("[LEAVE AGENT]")
+            print(response.model_dump())
 
             return response.model_dump()
 
@@ -627,7 +896,10 @@ def handle_leave(
         # Tool 결과 검증
         # ----------------------------------------------------
 
-        if not isinstance(result, dict):
+        if not isinstance(
+            result,
+            dict
+        ):
 
             return LeaveResponse(
 
@@ -684,10 +956,7 @@ def handle_leave(
 
 
         print("[LEAVE AGENT]")
-        print(
-            response.model_dump()
-        )
-
+        print(response.model_dump())
 
         return response.model_dump()
 
@@ -701,25 +970,39 @@ def handle_leave(
 
         request_id = action.request_id
 
-        # ========================================================
+
+        # ====================================================
         # STEP 7-1
         # 신청번호가 없는 경우
-        # ========================================================
+        # ====================================================
 
         if request_id is None:
 
-            # ----------------------------------------------------
+            # ------------------------------------------------
             # 이름으로 승인 요청한 경우
-            # ----------------------------------------------------
+            # ------------------------------------------------
 
-            if action.employee_name and not action.employee_id:
+            if (
+                action.employee_name
+                and not action.employee_id
+            ):
 
                 employees = find_employee.invoke({
-                    "name": action.employee_name
+
+                    "name":
+                        action.employee_name
+
                 })
 
-                print("[LEAVE EMPLOYEE SEARCH]")
-                print(employees)
+
+                print(
+                    "[LEAVE EMPLOYEE SEARCH]"
+                )
+
+                print(
+                    employees
+                )
+
 
                 # 직원 없음
                 if not employees:
@@ -750,11 +1033,15 @@ def handle_leave(
                 if len(employees) > 1:
 
                     employee_list = ", ".join(
+
                         f"{e['name']} "
                         f"({e['employee_id']}, "
                         f"{e['department']})"
+
                         for e in employees
+
                     )
+
 
                     return LeaveResponse(
 
@@ -781,9 +1068,11 @@ def handle_leave(
 
 
                 # 이름이 유일하면 사번 확정
+
                 action.employee_id = (
                     employees[0]["employee_id"]
                 )
+
 
                 print(
                     f"[LEAVE EMPLOYEE RESOLVED] "
@@ -792,9 +1081,9 @@ def handle_leave(
                 )
 
 
-            # ----------------------------------------------------
+            # ------------------------------------------------
             # 사번이 확정된 경우
-            # ----------------------------------------------------
+            # ------------------------------------------------
 
             if action.employee_id:
 
@@ -820,8 +1109,14 @@ def handle_leave(
 
                 })
 
-                print("[LEAVE APPROVE TARGET]")
-                print(result)
+
+                print(
+                    "[LEAVE APPROVE TARGET]"
+                )
+
+                print(
+                    result
+                )
 
 
                 # Tool 에러
@@ -881,6 +1176,7 @@ def handle_leave(
 
                 # 승인할 휴가가 여러 개이므로
                 # 신청번호를 다시 받음
+
                 return LeaveResponse(
 
                     type="leave_action",
@@ -896,20 +1192,18 @@ def handle_leave(
                     success=False,
 
                     message=(
-
                         f"{action.employee_name or action.employee_id}의 "
                         f"승인 대기 휴가가 "
                         f"{len(items)}건 있습니다. "
                         "승인할 신청번호를 지정해주세요."
-
                     )
 
                 ).model_dump()
 
 
-            # ----------------------------------------------------
+            # ------------------------------------------------
             # 이름도 없고 사번도 없는 경우
-            # ----------------------------------------------------
+            # ------------------------------------------------
 
             return LeaveResponse(
 
@@ -926,19 +1220,17 @@ def handle_leave(
                 success=False,
 
                 message=(
-
                     "승인할 휴가 신청번호가 필요합니다. "
                     "직원 이름 또는 신청번호를 지정해주세요."
-
                 )
 
             ).model_dump()
 
 
-        # ========================================================
+        # ====================================================
         # STEP 7-2
         # 신청번호가 확정된 경우 → 실제 승인
-        # ========================================================
+        # ====================================================
 
         print(
             f"[LEAVE APPROVE] "
@@ -957,12 +1249,20 @@ def handle_leave(
         })
 
 
-        print("[LEAVE APPROVE RESULT]")
-        print(result)
+        print(
+            "[LEAVE APPROVE RESULT]"
+        )
+
+        print(
+            result
+        )
 
 
         # Tool 결과 검증
-        if not isinstance(result, dict):
+        if not isinstance(
+            result,
+            dict
+        ):
 
             return LeaveResponse(
 
@@ -988,6 +1288,7 @@ def handle_leave(
 
 
         # 최종 결과
+
         return LeaveResponse(
 
             type="leave_action",
@@ -1041,10 +1342,8 @@ def handle_leave(
                 success=False,
 
                 message=(
-
                     "거절할 휴가 신청번호가 필요합니다. "
                     "거절할 신청번호를 지정해주세요."
-
                 )
 
             ).model_dump()
@@ -1067,11 +1366,19 @@ def handle_leave(
         })
 
 
-        print("[LEAVE REJECT RESULT]")
-        print(result)
+        print(
+            "[LEAVE REJECT RESULT]"
+        )
+
+        print(
+            result
+        )
 
 
-        if not isinstance(result, dict):
+        if not isinstance(
+            result,
+            dict
+        ):
 
             return LeaveResponse(
 
@@ -1089,7 +1396,9 @@ def handle_leave(
 
                 request_id=request_id,
 
-                message="휴가 거절 결과가 올바르지 않습니다."
+                message=(
+                    "휴가 거절 결과가 올바르지 않습니다."
+                )
 
             ).model_dump()
 
@@ -1122,6 +1431,216 @@ def handle_leave(
 
     # ========================================================
     # STEP 9
+    # Excel 단독 요청
+    # ========================================================
+
+    if action.action == "excel":
+
+        print(
+            "[LEAVE EXCEL] "
+            "Excel 단독 요청"
+        )
+
+
+        # Excel만 요청된 경우에도
+        # 먼저 같은 조건으로 휴가를 조회한다.
+
+        result = get_leave_requests.invoke({
+
+            "status":
+                action.status,
+
+            "employee_id":
+                action.employee_id,
+
+            "start_date":
+                action.start_date,
+
+            "end_date":
+                action.end_date,
+
+            "actor_employee_id":
+                actor_employee_id,
+
+            "scope":
+                action.scope
+
+        })
+
+
+        print(
+            "[LEAVE EXCEL QUERY RESULT]"
+        )
+
+        print(
+            result
+        )
+
+
+        if (
+            isinstance(result, dict)
+            and "error" in result
+        ):
+
+            return LeaveResponse(
+
+                type="leave_action",
+
+                action="query",
+
+                title="엑셀 생성",
+
+                count=0,
+
+                items=[],
+
+                success=False,
+
+                message=result["error"]
+
+            ).model_dump()
+
+
+        items = convert_leave_items(
+            result
+        )
+
+
+        excel_items = [
+            item.model_dump()
+            for item in items
+        ]
+
+
+        try:
+
+            excel_result = create_leave_excel.invoke({
+
+                "items":
+                    excel_items
+
+            })
+
+
+            print(
+                "[LEAVE EXCEL RESULT]"
+            )
+
+            print(
+                excel_result
+            )
+
+
+            if isinstance(
+                excel_result,
+                dict
+            ):
+
+                return {
+
+                    "type":
+                        "leave_list",
+
+                    "action":
+                        "excel",
+
+                    "title":
+                        "휴가 목록 엑셀",
+
+                    "count":
+                        len(items),
+
+                    "items":
+                        excel_items,
+
+                    "success":
+                        excel_result.get(
+                            "success",
+                            True
+                        ),
+
+                    "message":
+                        excel_result.get(
+                            "message",
+                            "엑셀 파일이 생성되었습니다."
+                        ),
+
+                    "file_path":
+                        excel_result.get(
+                            "file_path"
+                        )
+
+                }
+
+
+            return {
+
+                "type":
+                    "leave_list",
+
+                "action":
+                    "excel",
+
+                "title":
+                    "휴가 목록 엑셀",
+
+                "count":
+                    len(items),
+
+                "items":
+                    excel_items,
+
+                "success":
+                    True,
+
+                "message":
+                    "엑셀 파일이 생성되었습니다.",
+
+                "file_path":
+                    excel_result
+
+            }
+
+
+        except Exception as e:
+
+            print(
+                "[LEAVE EXCEL ERROR]"
+            )
+
+            print(
+                e
+            )
+
+
+            return {
+
+                "type":
+                    "leave_list",
+
+                "action":
+                    "excel",
+
+                "title":
+                    "휴가 목록 엑셀",
+
+                "count":
+                    len(items),
+
+                "items":
+                    excel_items,
+
+                "success":
+                    False,
+
+                "message":
+                    "엑셀 파일 생성에 실패했습니다."
+
+            }
+
+
+    # ========================================================
+    # STEP 10
     # 예외
     # ========================================================
 

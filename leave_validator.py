@@ -1,16 +1,13 @@
 import re
 
-from leave_schema import LeaveAction
+from leave_schema import LeaveAction, LeavePlan
+
 
 # ============================================================
-# 3. Action 검증
+# 단일 Action 검증
 # ============================================================
 
-def validate_action(data: dict) -> LeaveAction:
-
-    # --------------------------------------------------------
-    # Action
-    # --------------------------------------------------------
+def validate_single_action(data: dict) -> LeaveAction:
 
     action = data.get("action")
 
@@ -19,14 +16,11 @@ def validate_action(data: dict) -> LeaveAction:
         "balance",
         "request",
         "approve",
-        "reject"
+        "reject",
+        "excel"
     }:
         action = "query"
 
-
-    # --------------------------------------------------------
-    # Scope
-    # --------------------------------------------------------
 
     scope = data.get("scope")
 
@@ -39,10 +33,6 @@ def validate_action(data: dict) -> LeaveAction:
         scope = "self"
 
 
-    # --------------------------------------------------------
-    # Request ID
-    # --------------------------------------------------------
-
     request_id = data.get("request_id")
 
     if request_id is not None:
@@ -54,10 +44,6 @@ def validate_action(data: dict) -> LeaveAction:
             request_id = None
 
 
-    # --------------------------------------------------------
-    # Status
-    # --------------------------------------------------------
-
     status = data.get("status")
 
     if status not in {
@@ -67,10 +53,6 @@ def validate_action(data: dict) -> LeaveAction:
     }:
         status = None
 
-
-    # --------------------------------------------------------
-    # Employee ID
-    # --------------------------------------------------------
 
     employee_id = data.get("employee_id")
 
@@ -87,21 +69,13 @@ def validate_action(data: dict) -> LeaveAction:
             employee_id = None
 
 
-    # --------------------------------------------------------
-    # Employee Name
-    # --------------------------------------------------------
-
     employee_name = data.get("employee_name")
 
     if employee_name:
         employee_name = str(
             employee_name
-        ).strip()            
+        ).strip()
 
-
-    # --------------------------------------------------------
-    # Start Date
-    # --------------------------------------------------------
 
     start_date = data.get("start_date")
 
@@ -118,10 +92,6 @@ def validate_action(data: dict) -> LeaveAction:
             start_date = None
 
 
-    # --------------------------------------------------------
-    # End Date
-    # --------------------------------------------------------
-
     end_date = data.get("end_date")
 
     if end_date:
@@ -137,10 +107,6 @@ def validate_action(data: dict) -> LeaveAction:
             end_date = None
 
 
-    # --------------------------------------------------------
-    # Balance Type
-    # --------------------------------------------------------
-
     balance_type = data.get(
         "balance_type"
     )
@@ -153,10 +119,6 @@ def validate_action(data: dict) -> LeaveAction:
         balance_type = None
 
 
-    # --------------------------------------------------------
-    # balance인 경우만 기본값 적용
-    # --------------------------------------------------------
-
     if (
         action == "balance"
         and balance_type is None
@@ -164,34 +126,56 @@ def validate_action(data: dict) -> LeaveAction:
         balance_type = "remaining"
 
 
-    # --------------------------------------------------------
-    # request에서는 balance_type을 사용하지 않음
-    #
-    # LeaveAction schema에서 None을 허용해야 함
-    # --------------------------------------------------------
-
     if action == "request":
         balance_type = None
 
 
     return LeaveAction(
-
         action=action,
-
         scope=scope,
-
         request_id=request_id,
-
         status=status,
-
         employee_id=employee_id,
-
         employee_name=employee_name,
-
         start_date=start_date,
-
         end_date=end_date,
-
         balance_type=balance_type
+    )
 
+
+# ============================================================
+# 전체 Plan 검증
+# ============================================================
+
+def validate_action(data: dict) -> LeavePlan:
+
+    actions = data.get("actions")
+
+    if not isinstance(actions, list):
+        raise ValueError(
+            "actions가 리스트가 아닙니다."
+        )
+
+    if not actions:
+        raise ValueError(
+            "실행할 action이 없습니다."
+        )
+
+    validated_actions = []
+
+    for action_data in actions:
+
+        if not isinstance(action_data, dict):
+            raise ValueError(
+                "잘못된 action 형식입니다."
+            )
+
+        validated_actions.append(
+            validate_single_action(
+                action_data
+            )
+        )
+
+    return LeavePlan(
+        actions=validated_actions
     )

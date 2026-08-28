@@ -25,15 +25,16 @@ print("BASE_URL =", LLM_OLLAMA_BASE_URL)
 print("MODEL =", MODEL_NAME)
 
 
-# Router용
 router_llm = ChatOllama(
     base_url=LLM_OLLAMA_BASE_URL,
     model=MODEL_NAME,
     temperature=0,
     streaming=False,
-    num_ctx=4096
+    num_ctx=4096,
+    think=False,
+    num_predict=32,
+    keep_alive=-1,
 )
-
 
 # 실제 업무 분석용
 answer_llm = ChatOllama(
@@ -41,5 +42,7 @@ answer_llm = ChatOllama(
     model=MODEL_NAME,
     temperature=0,
     streaming=False,
-    num_ctx=8192,
+    num_ctx=4096,
+    think=False,
+    keep_alive=-1,
 )

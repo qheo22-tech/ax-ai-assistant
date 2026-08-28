@@ -6,6 +6,13 @@ from typing import Optional, Literal
 from langchain_core.tools import tool
 
 
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from pathlib import Path
+import uuid
+
+
+
 # ============================================================
 # DB 연결
 # ============================================================
@@ -1526,3 +1533,91 @@ def find_employee(name: str):
     finally:
         cursor.close()
         conn.close()
+
+@tool
+def create_leave_excel(leave_data: list[dict]):
+    """
+    조회된 휴가 데이터를 Excel 파일로 생성한다.
+    """
+
+    headers = [
+        "신청번호",
+        "사번",
+        "신청자",
+        "부서",
+        "직급",
+        "시작일",
+        "종료일",
+        "일수",
+        "사유",
+        "상태"
+    ]
+
+    rows = []
+
+    for item in leave_data:
+        rows.append([
+            item["request_id"],
+            item["employee_id"],
+            item["name"],
+            item["department"],
+            item["position"],
+            item["start_date"],
+            item["end_date"],
+            item["leave_days"],
+            item["reason"],
+            item["status"]
+        ])
+
+    # Excel 생성
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "휴가 목록"
+
+    # 헤더
+    ws.append(headers)
+
+    # 데이터
+    for row in rows:
+        ws.append(row)
+
+    # 헤더 스타일
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+    # 컬럼 너비
+    widths = [
+        10, 12, 12, 15, 10,
+        15, 15, 10, 30, 15
+    ]
+
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[
+            chr(64 + index)
+        ].width = width
+
+    # 파일 저장
+    output_dir = Path("generated_files")
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    # 파일명 고정
+    filename = "휴가자목록조회.xlsx"
+
+    file_path = output_dir / filename
+
+    wb.save(file_path)
+
+    print("[EXCEL CREATED]")
+    print(file_path)
+
+    # 결과 반환
+    return {
+        "success": True,
+        "message": "엑셀 파일이 생성되었습니다.",
+        "file_path": str(file_path),
+        "filename": filename
+    }

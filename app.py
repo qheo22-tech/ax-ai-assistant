@@ -122,7 +122,7 @@ def respond(
         message
     )
 
-    messages = memory.get_messages()
+    messages = memory.get_recent_messages()
 
     previous_messages = messages[:-1]
 
@@ -180,7 +180,6 @@ def respond(
 
         route = route_question(
             message,
-            previous_messages
         )
 
 
@@ -219,13 +218,13 @@ def respond(
             f"employee_id={current_user_id}"
         )
 
-
         response = handle_leave(
             message,
             current_user_id,
             request_id=followup_request_id,
             previous_action=previous_action,
-            messages=previous_messages
+            messages=previous_messages,
+            last_result=memory.get_last_result()
         )
 
 

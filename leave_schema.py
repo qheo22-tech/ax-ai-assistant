@@ -13,7 +13,8 @@ class LeaveAction(BaseModel):
         "request",
         "approve",
         "reject",
-        "balance"
+        "balance",
+        "excel"
     ]
 
     request_id: Optional[int] = None
@@ -92,7 +93,8 @@ class LeaveResponse(BaseModel):
         "request",
         "approve",
         "reject",
-        "balance"
+        "balance",
+        "excel"
     ]
 
     title: str
@@ -106,3 +108,7 @@ class LeaveResponse(BaseModel):
     request_id: Optional[int] = None
 
     message: Optional[str] = None
+
+
+class LeavePlan(BaseModel):
+    actions: list[LeaveAction]

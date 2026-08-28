@@ -1,9 +1,6 @@
 import json
 import re
 
-# ============================================================
-# 2. JSON Parser
-# ============================================================
 
 def parse_action_result(result) -> dict:
 
@@ -12,41 +9,41 @@ def parse_action_result(result) -> dict:
 
     result = str(result).strip()
 
-    # --------------------------------------------------------
-    # 1. ```json ... ``` 코드블록이 있으면
-    #    첫 번째 JSON 코드블록만 사용
-    # --------------------------------------------------------
-
+    # 코드블록 제거
     match = re.search(
-        r"```(?:json)?\s*(\{.*?\})\s*```",
+        r"```(?:json)?\s*(.*?)\s*```",
         result,
         re.DOTALL | re.IGNORECASE
     )
 
     if match:
-        json_text = match.group(1)
+        result = match.group(1).strip()
 
-    else:
-        # ----------------------------------------------------
-        # 2. 코드블록이 없으면 첫 번째 JSON 객체만 추출
-        # ----------------------------------------------------
+    # JSON 시작 위치 찾기
+    start = result.find("{")
 
-        match = re.search(
-            r"\{.*?\}",
-            result,
-            re.DOTALL
+    if start == -1:
+        raise ValueError(
+            f"JSON 결과를 찾을 수 없습니다: {result}"
         )
 
-        if not match:
-            raise ValueError(
-                f"JSON 결과를 찾을 수 없습니다: {result}"
-            )
+    # 중첩 JSON까지 정상적으로 파싱
+    decoder = json.JSONDecoder()
 
-        json_text = match.group(0)
-
+    try:
+        data, _ = decoder.raw_decode(
+            result[start:]
+        )
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"JSON 파싱 실패: {e}\n결과: {result}"
+        )
 
     print("[LEAVE PARSED JSON]")
-    print(json_text)
+    print(json.dumps(
+        data,
+        ensure_ascii=False,
+        indent=2
+    ))
 
-
-    return json.loads(json_text)
+    return data
