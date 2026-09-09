@@ -28,7 +28,7 @@ DB_CONFIG = {
     "port": int(os.getenv("DB_PORT", "5432")),
     "dbname": os.getenv("DB_NAME", "ax_company"),
     "user": os.getenv("DB_USER", "axuser"),
-    "password": os.getenv("DB_PASSWORD", "axpassword"),
+    "password": os.getenv("DB_PASS", "axpassword"),
 }
 
 TOP_K = int(os.getenv("RAG_TOP_K", "5"))
