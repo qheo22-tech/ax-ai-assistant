@@ -2,7 +2,10 @@ import json
 import re
 import os
 
+from datetime import date
+
 from leave_prompts import leave_action_chain
+from normalize_prompt import normalize_chain
 
 from leave_tools import (
     get_leave_requests,
@@ -97,11 +100,22 @@ def handle_leave(
         print("[LEAVE PREVIOUS RESULT]")
         print(previous_result)
 
+        """
         raw_result = leave_action_chain.invoke({
             "question": question,
             "history": history,
-            "previous_result": previous_result
+            "previous_result": previous_result,
+            "today": date.today().isoformat()
         })
+        파이썬 범위주석
+        """
+        
+
+        result = normalize_chain.invoke({
+            "text": text
+        })
+        
+        
 
         print("[LEAVE ACTION RAW]")
         print(repr(raw_result))

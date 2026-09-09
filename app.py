@@ -1,6 +1,8 @@
 import gradio as gr
+import json
+import os
 
-from llm import answer_llm
+from llm import answer_llm , normalize_llm
 from langchain_core.prompts import ChatPromptTemplate
 
 from router import route_question
@@ -8,124 +10,82 @@ from leave_agent import handle_leave
 
 from conversation_memory import ConversationMemory
 
+from normalize_prompt import normalize_prompt
 
-# ============================================================
-# 일반 답변 Prompt
-# ============================================================
+
+# =========================================================
+# 일반 LLM
+# =========================================================
 
 answer_prompt = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        "너는 도움이 되는 AI 어시스턴트다."
-    ),
-    (
-        "human",
-        "{question}"
-    )
+    ("system", "너는 도움이 되는 AI 어시스턴트다."),
+    ("human", "{question}")
 ])
-
-
-# ============================================================
-# 일반 답변 Chain
-# ============================================================
 
 answer_chain = answer_prompt | answer_llm
 
 
-# ============================================================
+# =========================================================
+# 문서 정규화 LLM
+# =========================================================
+
+normalize_chain = normalize_prompt | normalize_llm
+
+
+# =========================================================
 # Conversation Memory
-# ============================================================
+# =========================================================
 
 conversation_memories = {}
 
 
 def get_memory(employee_id: str):
-
     if employee_id not in conversation_memories:
-
-        conversation_memories[employee_id] = (
-            ConversationMemory()
-        )
+        conversation_memories[employee_id] = ConversationMemory()
 
     return conversation_memories[employee_id]
 
 
-# ============================================================
-# 로그인 사용자 가져오기
-# ============================================================
+# =========================================================
+# 현재 로그인 사용자
+# =========================================================
 
 def get_current_user(request: gr.Request):
-
     try:
-
         session = request.request.session
-
         employee_id = session.get("employee_id")
 
-        print(
-            f"[SESSION] employee_id={employee_id}"
-        )
+        print(f"[SESSION] employee_id={employee_id}")
 
         return employee_id
 
     except Exception as e:
-
         print("[SESSION ERROR]")
         print(e)
 
         return None
 
 
-# ============================================================
-# Respond
-# ============================================================
+# =========================================================
+# 기존 Chat 응답
+# =========================================================
 
-def respond(
-    message,
-    history,
-    request: gr.Request
-):
-
-    # --------------------------------------------------------
-    # 1. 로그인 사용자 확인
-    # --------------------------------------------------------
+def respond(message, history, request: gr.Request):
 
     current_user_id = get_current_user(request)
 
     if not current_user_id:
+        return "로그인 정보가 없습니다. 다시 로그인해주세요."
 
-        return (
-            "로그인 정보가 없습니다. "
-            "다시 로그인해주세요."
-        )
+    print(f"[CURRENT USER] {current_user_id}")
 
+    memory = get_memory(current_user_id)
 
-    print(
-        f"[CURRENT USER] {current_user_id}"
-    )
-
-
-    # --------------------------------------------------------
-    # 2. Conversation Memory
-    # --------------------------------------------------------
-
-    memory = get_memory(
-        current_user_id
-    )
-
-
-    # --------------------------------------------------------
-    # 3. 현재 질문 Memory 저장
-    # --------------------------------------------------------
-
-    memory.add_user(
-        message
-    )
+    memory.add_user(message)
 
     messages = memory.get_recent_messages()
 
     previous_messages = messages[:-1]
-
 
     print("[MEMORY USER]")
     print(messages)
@@ -133,20 +93,14 @@ def respond(
     print("[PREVIOUS MESSAGES]")
     print(previous_messages)
 
-
-    # --------------------------------------------------------
-    # 4. Router
-    # --------------------------------------------------------
-
     last_result = memory.get_last_result()
 
     followup_request_id = None
     previous_action = None
 
-
-    # --------------------------------------------------------
-    # 승인 / 거절 후 신청번호 선택
-    # --------------------------------------------------------
+    # =====================================================
+    # 숫자 입력에 대한 승인/거절 후속 처리
+    # =====================================================
 
     if (
         last_result
@@ -157,19 +111,14 @@ def respond(
         and message.strip().isdigit()
     ):
 
-        followup_request_id = int(
-            message.strip()
-        )
+        followup_request_id = int(message.strip())
 
-        previous_action = last_result.get(
-            "action"
-        )
+        previous_action = last_result.get("action")
 
         route = "leave"
 
         print(
-            f"[ROUTER BYPASS] "
-            f"{message} -> leave, "
+            f"[ROUTER BYPASS] {message} -> leave, "
             f"action={previous_action}, "
             f"request_id={followup_request_id}"
         )
@@ -181,15 +130,11 @@ def respond(
             previous_messages
         )
 
+    print(f"[ROUTER] {message} -> {route}")
 
-    print(
-        f"[ROUTER] {message} -> {route}"
-    )
-
-
-    # --------------------------------------------------------
-    # 5. LLM 서버 연결 실패
-    # --------------------------------------------------------
+    # =====================================================
+    # AI 서버 종료
+    # =====================================================
 
     if route == "llm_unavailable":
 
@@ -198,22 +143,18 @@ def respond(
             "평일 18:00 이후 및 주말에는 GPU 서버를 종료합니다."
         )
 
-        memory.add_assistant(
-            response
-        )
+        memory.add_assistant(response)
 
         return response
 
-
-    # --------------------------------------------------------
-    # 6. Leave Agent
-    # --------------------------------------------------------
+    # =====================================================
+    # 휴가 Agent
+    # =====================================================
 
     if route == "leave":
 
         print(
-            f"[LEAVE ACTOR] "
-            f"employee_id={current_user_id}"
+            f"[LEAVE ACTOR] employee_id={current_user_id}"
         )
 
         response = handle_leave(
@@ -225,80 +166,46 @@ def respond(
             last_result=memory.get_last_result()
         )
 
-
         print("[RESPOND RESPONSE]")
         print(response)
 
-
-        # ----------------------------------------------------
-        # 마지막 Leave 결과 저장
-        # ----------------------------------------------------
-
-        memory.set_last_result(
-            response
-        )
-
+        memory.set_last_result(response)
 
         print("[MEMORY LAST RESULT]")
-        print(
-            memory.get_last_result()
-        )
-
-
-        # ----------------------------------------------------
-        # Gradio 출력
-        # ----------------------------------------------------
+        print(memory.get_last_result())
 
         print("[BEFORE FORMAT]")
 
-        formatted = format_leave_response(
-            response
-        )
+        formatted = format_leave_response(response)
 
         print("[AFTER FORMAT]")
         print(formatted)
 
-
-        # ----------------------------------------------------
-        # Leave 응답 Memory 저장
-        # ----------------------------------------------------
-
-        memory.add_assistant(
-            formatted
-        )
-
+        memory.add_assistant(formatted)
 
         print("[MEMORY AFTER LEAVE]")
-        print(
-            memory.get_messages()
-        )
-
+        print(memory.get_messages())
 
         return formatted
 
-
-    # --------------------------------------------------------
-    # 7. Unknown
-    # --------------------------------------------------------
+    # =====================================================
+    # 이해하지 못한 요청
+    # =====================================================
 
     if route == "unknown":
 
         response = (
             "요청을 정확히 이해하지 못했습니다. "
-            "어떤 업무를 원하시는지 조금 더 구체적으로 "
-            "말씀해주세요."
+            "어떤 업무를 원하시는지 조금 더 구체적으로 말씀해주세요."
         )
 
-        memory.add_assistant(
-            response
-        )
+        memory.add_assistant(response)
 
         return response
 
-
-    # --------------------------------------------------------
-    # 8. General
-    # --------------------------------------------------------
+    # =====================================================
+    # 일반 LLM
+    # =====================================================
 
     try:
 
@@ -313,46 +220,203 @@ def respond(
 
         response = (
             "AI 서버에 연결할 수 없습니다. "
-            "현재 AI 서버가 실행되지 않았거나 "
-            "연결할 수 없는 상태입니다. "
+            "현재 AI 서버가 실행되지 않았거나 연결할 수 없는 상태입니다. "
             "잠시 후 다시 시도해주세요."
         )
 
-        memory.add_assistant(
-            response
-        )
+        memory.add_assistant(response)
 
         return response
 
-
-    # --------------------------------------------------------
-    # 일반 답변 문자열 추출
-    # --------------------------------------------------------
-
     if hasattr(response, "content"):
-
         assistant_message = response.content
-
     else:
-
         assistant_message = str(response)
 
-
-    # --------------------------------------------------------
-    # 일반 답변 Memory 저장
-    # --------------------------------------------------------
-
-    memory.add_assistant(
-        assistant_message
-    )
-
+    memory.add_assistant(assistant_message)
 
     return assistant_message
 
 
-# ============================================================
-# 상태값 한글 표시
-# ============================================================
+# =========================================================
+# 문서 정규화 - JSON 결과 파싱
+# =========================================================
+
+def parse_normalize_result(content):
+
+    content = content.strip()
+
+    # ```json 제거
+    if content.startswith("```json"):
+        content = content[7:]
+
+    # ``` 제거
+    elif content.startswith("```"):
+        content = content[3:]
+
+    # 마지막 ``` 제거
+    if content.endswith("```"):
+        content = content[:-3]
+
+    content = content.strip()
+
+    return json.loads(content)
+
+
+# =========================================================
+# 문서 정규화
+# =========================================================
+
+def normalize_uploaded_file(file):
+
+    if file is None:
+        return "파일을 먼저 업로드해주세요."
+
+    try:
+
+        file_path = file
+
+        print("=" * 80)
+        print("[NORMALIZE START]")
+        print(f"[FILE] {file_path}")
+        print("=" * 80)
+
+        # =================================================
+        # JSON 파일 읽기
+        # =================================================
+
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            pages = json.load(f)
+
+        # =================================================
+        # JSON 구조 확인
+        # =================================================
+
+        if not isinstance(pages, list):
+
+            return (
+                "JSON 형식이 올바르지 않습니다.\n\n"
+                "페이지 배열 형태의 JSON이어야 합니다."
+            )
+
+        print(
+            f"[NORMALIZE] 전체 페이지: {len(pages)}"
+        )
+
+        normalized_pages = []
+
+        # =================================================
+        # 페이지별 정규화
+        #
+        # 현재는 chunking 하지 않음.
+        # 페이지 하나당 LLM 한 번 호출.
+        # =================================================
+
+        for index, page in enumerate(pages):
+
+            page_number = page.get("page")
+
+            print(
+                f"[NORMALIZE] "
+                f"{index + 1}/{len(pages)} "
+                f"page={page_number}"
+            )
+
+            text = page.get("text", "")
+
+            if text is None:
+                text = ""
+
+            input_json = json.dumps(
+                [page],
+                ensure_ascii=False
+            )
+
+            response = normalize_chain.invoke({
+                "text": input_json
+            })
+
+            if hasattr(response, "content"):
+                content = response.content
+            else:
+                content = str(response)
+
+            print("[NORMALIZE RAW RESPONSE]")
+            print(content)
+
+            result = parse_normalize_result(content)
+
+            if isinstance(result, list):
+                normalized_pages.extend(result)
+
+            elif isinstance(result, dict):
+                normalized_pages.append(result)
+
+            else:
+                raise ValueError(
+                    f"정규화 결과 형식 오류: "
+                    f"page={page_number}"
+                )
+
+        # =================================================
+        # 페이지 순서 정렬
+        # =================================================
+
+        normalized_pages.sort(
+            key=lambda x: x.get("page", 0)
+        )
+
+        print("=" * 80)
+        print("[NORMALIZE COMPLETE]")
+        print(
+            f"정규화 페이지 수: "
+            f"{len(normalized_pages)}"
+        )
+        print("=" * 80)
+
+        # =================================================
+        # 최종 JSON
+        # =================================================
+
+        result_json = json.dumps(
+            normalized_pages,
+            ensure_ascii=False,
+            indent=2
+        )
+
+        return result_json
+
+    except json.JSONDecodeError as e:
+
+        print("[NORMALIZE JSON ERROR]")
+        print(e)
+
+        return (
+            "LLM이 올바른 JSON을 반환하지 않았습니다.\n\n"
+            f"{e}"
+        )
+
+    except Exception as e:
+
+        print("=" * 80)
+        print("[NORMALIZE ERROR]")
+        print(e)
+        print("=" * 80)
+
+        return (
+            "문서 정규화 중 오류가 발생했습니다.\n\n"
+            f"{type(e).__name__}: {e}"
+        )
+
+
+# =========================================================
+# 휴가 상태
+# =========================================================
 
 def get_status_display(status):
 
@@ -370,15 +434,11 @@ def get_status_display(status):
     return f"{status} ({label})"
 
 
-# ============================================================
-# Leave Response → Gradio 출력
-# ============================================================
+# =========================================================
+# 휴가 응답 포맷
+# =========================================================
 
 def format_leave_response(response):
-
-    # ========================================================
-    # 휴가 목록 조회
-    # ========================================================
 
     if response.get("type") == "leave_list":
 
@@ -389,10 +449,6 @@ def format_leave_response(response):
             f"({response['count']}건)"
         )
 
-        # ----------------------------------------------------
-        # 조회 결과 없음
-        # ----------------------------------------------------
-
         if response["count"] == 0:
 
             lines.append(
@@ -401,14 +457,8 @@ def format_leave_response(response):
 
             return "\n".join(lines)
 
-        # ----------------------------------------------------
-        # 테이블
-        # ----------------------------------------------------
-
         lines.append(
-            "\n"
-            "| 신청번호 | 신청자 | 부서 | 기간 | "
-            "일수 | 사유 | 상태 |"
+            "\n| 신청번호 | 신청자 | 부서 | 기간 | 일수 | 사유 | 상태 |"
         )
 
         lines.append(
@@ -423,19 +473,13 @@ def format_leave_response(response):
 
             lines.append(
                 f"| {item['request_id']} "
-                f"| {item['name']} "
-                f"({item['employee_id']}) "
+                f"| {item['name']} ({item['employee_id']}) "
                 f"| {item['department']} "
-                f"| {item['start_date']} ~ "
-                f"{item['end_date']} "
+                f"| {item['start_date']} ~ {item['end_date']} "
                 f"| {item['leave_days']}일 "
                 f"| {item['reason']} "
                 f"| {status_display} |"
             )
-
-        # ----------------------------------------------------
-        # Excel 다운로드
-        # ----------------------------------------------------
 
         if (
             response.get("action") == "excel"
@@ -448,8 +492,7 @@ def format_leave_response(response):
             lines.append("")
 
             lines.append(
-                f"[엑셀 파일 다운로드]"
-                f"(/download/{filename})"
+                f"[엑셀 파일 다운로드](/download/{filename})"
             )
 
             print(
@@ -459,10 +502,9 @@ def format_leave_response(response):
 
         return "\n".join(lines)
 
-
-    # ========================================================
-    # 승인 / 거절 / 신청 / 기타 Leave Action
-    # ========================================================
+    # =====================================================
+    # 휴가 승인 / 거절
+    # =====================================================
 
     if response.get("type") == "leave_action":
 
@@ -478,9 +520,7 @@ def format_leave_response(response):
             )
 
             lines.append(
-                "\n"
-                "| 신청번호 | 신청자 | 부서 | 기간 | "
-                "일수 | 사유 | 상태 |"
+                "\n| 신청번호 | 신청자 | 부서 | 기간 | 일수 | 사유 | 상태 |"
             )
 
             lines.append(
@@ -495,11 +535,9 @@ def format_leave_response(response):
 
                 lines.append(
                     f"| {item['request_id']} "
-                    f"| {item['name']} "
-                    f"({item['employee_id']}) "
+                    f"| {item['name']} ({item['employee_id']}) "
                     f"| {item['department']} "
-                    f"| {item['start_date']} ~ "
-                    f"{item['end_date']} "
+                    f"| {item['start_date']} ~ {item['end_date']} "
                     f"| {item['leave_days']}일 "
                     f"| {item['reason']} "
                     f"| {status_display} |"
@@ -512,16 +550,12 @@ def format_leave_response(response):
             "휴가 업무가 처리되었습니다."
         )
 
-
-    # ========================================================
-    # 기타
-    # ========================================================
-
     return "휴가 요청을 처리할 수 없습니다."
 
-# ============================================================
-# Gradio CSS
-# ============================================================
+
+# =========================================================
+# CSS
+# =========================================================
 
 css = """
 .gradio-container {
@@ -535,14 +569,19 @@ css = """
 """
 
 
-# ============================================================
-# Gradio
-# ============================================================
+# =========================================================
+# UI
+# =========================================================
 
-demo = gr.ChatInterface(
-    fn=respond,
-    title="AI Assistant",
-    description="""
+with gr.Blocks(css=css) as demo:
+
+    # =====================================================
+    # 기존 AI Assistant
+    # =====================================================
+
+    gr.Markdown("""
+# AI Assistant
+
 **AX Company AI Assistant**
 
 사내 휴가 관련 업무를 지원하는 AI Agent입니다.
@@ -552,6 +591,7 @@ Tool Calling 기반으로 휴가 조회·신청·승인·거절 및 Excel 생성
 ※ 휴가 승인 및 거절은 관리자만 가능합니다.
 
 ### 사용 예시
+
 - 남은 휴가가 며칠이야?
 - 신청휴가 보여줘
 - 신청휴가로 엑셀 만들어줘
@@ -560,9 +600,57 @@ Tool Calling 기반으로 휴가 조회·신청·승인·거절 및 Excel 생성
 - 우리팀 휴가목록 보여줘 (팀장)
 - 전체 휴가 목록 보여줘 (관리자)
 - 휴가 신청 해줘
-""",
-    textbox=gr.Textbox(
-        placeholder="휴가 관련 질문을 입력해주세요.",
-        container=False
+""")
+
+    # =====================================================
+    # 기존 채팅
+    # =====================================================
+
+    chat = gr.ChatInterface(
+        fn=respond,
+        textbox=gr.Textbox(
+            placeholder="휴가 관련 질문을 입력해주세요.",
+            container=False
+        )
     )
-)
+
+    # =====================================================
+    # 문서 정규화
+    # =====================================================
+
+    gr.Markdown("---")
+
+    gr.Markdown("""
+## 문서 정규화
+
+PDF/JSON 추출 과정에서 발생한 불필요한 줄바꿈을 정규화합니다.
+""")
+
+    with gr.Row():
+
+        normalize_file = gr.File(
+            label="문서 업로드",
+            file_types=[".json"],
+            type="filepath"
+        )
+
+        normalize_button = gr.Button(
+            "정규화 실행",
+            variant="primary"
+        )
+
+    normalize_output = gr.Code(
+        label="정규화 결과",
+        language="json",
+        lines=25
+    )
+
+    # =====================================================
+    # 정규화 버튼 이벤트
+    # =====================================================
+
+    normalize_button.click(
+        fn=normalize_uploaded_file,
+        inputs=normalize_file,
+        outputs=normalize_output
+    )

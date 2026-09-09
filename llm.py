@@ -57,3 +57,15 @@ answer_llm = ChatOllama(
     num_predict=ANSWER_NUM_PREDICT,
     keep_alive=-1,
 )
+
+
+normalize_llm = ChatOllama(
+    base_url=LLM_OLLAMA_BASE_URL,
+    model=MODEL_NAME,
+    temperature=0,
+    streaming=False,
+    num_ctx=4096,
+    think=False,
+    num_predict=4096,
+    keep_alive=-1,
+)
