@@ -15,6 +15,11 @@ MODEL_NAME = os.getenv(
     "qwen3-14b"
 )
 
+EMBED_MODEL_NAME = os.getenv(
+    "EMBED_MODEL_NAME",
+    "bge-m3"
+)
+
 TEMPERATURE = float(
     os.getenv("TEMPERATURE", "0")
 )

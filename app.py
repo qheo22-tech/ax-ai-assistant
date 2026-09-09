@@ -7,10 +7,12 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from router import route_question
 from leave_agent import handle_leave
+from policy_agent import answer_policy
 
 from conversation_memory import ConversationMemory
 
 from normalize_prompt import normalize_prompt
+
 
 
 # =========================================================
@@ -189,6 +191,17 @@ def respond(message, history, request: gr.Request):
         return formatted
 
     # =====================================================
+    # 휴가 정책 RAG
+    # =====================================================
+
+    if route == "policy":
+        response = answer_policy(message)
+
+        memory.add_assistant(response)
+
+        return response
+    
+    # =====================================================
     # 이해하지 못한 요청
     # =====================================================
 
@@ -202,6 +215,23 @@ def respond(message, history, request: gr.Request):
         memory.add_assistant(response)
 
         return response
+
+    # =====================================================
+    # 업무 범위 밖 요청
+    # =====================================================
+
+    if route == "general":
+
+        response = (
+            "업무 지원 범위를 벗어난 질문입니다. "
+            "휴가 업무 또는 노무관리 관련 질문을 입력해주세요."
+        )
+
+        memory.add_assistant(response)
+
+        return response
+
+
 
     # =====================================================
     # 일반 LLM
@@ -568,7 +598,6 @@ css = """
 }
 """
 
-
 # =========================================================
 # UI
 # =========================================================
@@ -576,7 +605,7 @@ css = """
 with gr.Blocks(css=css) as demo:
 
     # =====================================================
-    # 기존 AI Assistant
+    # AI Assistant 소개
     # =====================================================
 
     gr.Markdown("""
@@ -584,23 +613,45 @@ with gr.Blocks(css=css) as demo:
 
 **AX Company AI Assistant**
 
-사내 휴가 관련 업무를 지원하는 AI Agent입니다.
+사내 휴가 업무 처리와 휴가 정책 질의를 지원하는 AI Agent입니다.
 
-Tool Calling 기반으로 휴가 조회·신청·승인·거절 및 Excel 생성을 수행합니다.
+Tool Calling 기반으로 휴가 조회·신청·승인·거절 및 Excel 생성을 수행하고,
+RAG를 통해 정책 문서를 검색하여 근거 기반 답변을 제공합니다.
 
 ※ 휴가 승인 및 거절은 관리자만 가능합니다.
+""")
 
-### 사용 예시
+    # =====================================================
+    # 사용 예시
+    # =====================================================
+
+    gr.Markdown("### 사용 예시")
+
+    with gr.Row():
+
+        with gr.Column():
+            gr.Markdown("""
+#### 🛠 휴가 업무 · Agent / Tool Calling
 
 - 남은 휴가가 며칠이야?
 - 신청휴가 보여줘
-- 신청휴가로 엑셀 만들어줘
+- 휴가 신청 해줘
 - 승인된 휴가만 보여줘
-- 거절된 휴가만 보여줘
 - 우리팀 휴가목록 보여줘 (팀장)
 - 전체 휴가 목록 보여줘 (관리자)
-- 휴가 신청 해줘
+- 신청휴가로 엑셀 만들어줘
 """)
+
+        with gr.Column():
+            gr.Markdown("""
+#### 📚 휴가 정책 문의 · RAG
+
+- 1년 미만 근로자는 연차가 몇 개 발생하나요?
+- 연차유급휴가는 어떻게 부여하나요?
+- 연차 사용촉진제도는 무엇인가요?
+- 육아휴직 기간도 연차 산정 시 출근한 것으로 보나요?
+""")
+            
 
     # =====================================================
     # 기존 채팅
@@ -620,37 +671,37 @@ Tool Calling 기반으로 휴가 조회·신청·승인·거절 및 Excel 생성
 
     gr.Markdown("---")
 
-    gr.Markdown("""
-## 문서 정규화
+#      gr.Markdown("""
+# ## 문서 정규화
 
-PDF/JSON 추출 과정에서 발생한 불필요한 줄바꿈을 정규화합니다.
-""")
+# PDF/JSON 추출 과정에서 발생한 불필요한 줄바꿈을 정규화합니다.
+# """)
 
-    with gr.Row():
+#     with gr.Row():
 
-        normalize_file = gr.File(
-            label="문서 업로드",
-            file_types=[".json"],
-            type="filepath"
-        )
+#         normalize_file = gr.File(
+#             label="문서 업로드",
+#             file_types=[".json"],
+#             type="filepath"
+#         )
 
-        normalize_button = gr.Button(
-            "정규화 실행",
-            variant="primary"
-        )
+#         normalize_button = gr.Button(
+#             "정규화 실행",
+#             variant="primary"
+#         )
 
-    normalize_output = gr.Code(
-        label="정규화 결과",
-        language="json",
-        lines=25
-    )
+#     normalize_output = gr.Code(
+#         label="정규화 결과",
+#         language="json",
+#         lines=25
+#     )
 
-    # =====================================================
-    # 정규화 버튼 이벤트
-    # =====================================================
+#     # =====================================================
+#     # 정규화 버튼 이벤트
+#     # =====================================================
 
-    normalize_button.click(
-        fn=normalize_uploaded_file,
-        inputs=normalize_file,
-        outputs=normalize_output
-    )
+#     normalize_button.click(
+#         fn=normalize_uploaded_file,
+#         inputs=normalize_file,
+#         outputs=normalize_output
+#     )

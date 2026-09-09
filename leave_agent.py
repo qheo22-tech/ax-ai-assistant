@@ -100,19 +100,17 @@ def handle_leave(
         print("[LEAVE PREVIOUS RESULT]")
         print(previous_result)
 
-        """
+        
         raw_result = leave_action_chain.invoke({
             "question": question,
             "history": history,
             "previous_result": previous_result,
             "today": date.today().isoformat()
         })
-        파이썬 범위주석
-        """
         
 
         result = normalize_chain.invoke({
-            "text": text
+            "text": question
         })
         
         
